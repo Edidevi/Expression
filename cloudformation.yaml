@@ -1,0 +1,230 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Face Expression Lab - Website with Rekognition
+
+Parameters:
+  GitHubOwner:
+    Type: String
+    Default: Edidevi
+  GitHubRepo:
+    Type: String
+    Default: face-expression-lab
+  GitHubBranch:
+    Type: String
+    Default: main
+  GitHubConnectionArn:
+    Type: String
+
+Resources:
+
+  # --- S3: Website Bucket ---
+  WebsiteBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      WebsiteConfiguration:
+        IndexDocument: index.html
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: false
+        BlockPublicPolicy: false
+        IgnorePublicAcls: false
+        RestrictPublicBuckets: false
+
+  WebsiteBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref WebsiteBucket
+      PolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal: '*'
+            Action: s3:GetObject
+            Resource: !Sub '${WebsiteBucket.Arn}/*'
+
+  # --- S3: Artifacts Bucket ---
+  ArtifactsBucket:
+    Type: AWS::S3::Bucket
+
+  # --- Lambda: Rekognition Handler ---
+  LambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: RekognitionAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: rekognition:DetectFaces
+                Resource: '*'
+
+  LambdaFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: face-expression-detector
+      Runtime: python3.12
+      Handler: index.lambda_handler
+      Role: !GetAtt LambdaRole.Arn
+      Timeout: 30
+      Code:
+        ZipFile: |
+          def lambda_handler(event, context):
+            return {'statusCode': 200, 'body': 'placeholder'}
+
+  # --- API Gateway ---
+  HttpApi:
+    Type: AWS::ApiGatewayV2::Api
+    Properties:
+      Name: face-expression-api
+      ProtocolType: HTTP
+      CorsConfiguration:
+        AllowOrigins:
+          - '*'
+        AllowMethods:
+          - POST
+          - OPTIONS
+        AllowHeaders:
+          - Content-Type
+
+  LambdaPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref LambdaFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${HttpApi}/*/*'
+
+  ApiIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref HttpApi
+      IntegrationType: AWS_PROXY
+      IntegrationUri: !Sub >-
+        arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${LambdaFunction.Arn}/invocations
+      PayloadFormatVersion: '2.0'
+
+  ApiRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref HttpApi
+      RouteKey: 'POST /detect'
+      Target: !Sub 'integrations/${ApiIntegration}'
+
+  ApiStage:
+    Type: AWS::ApiGatewayV2::Stage
+    Properties:
+      ApiId: !Ref HttpApi
+      StageName: '$default'
+      AutoDeploy: true
+
+  # --- CodeBuild ---
+  CodeBuildRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: codebuild.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: CodeBuildPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:PutObject
+                  - s3:DeleteObject
+                  - s3:GetObject
+                  - s3:ListBucket
+                Resource:
+                  - !GetAtt WebsiteBucket.Arn
+                  - !Sub '${WebsiteBucket.Arn}/*'
+                  - !GetAtt ArtifactsBucket.Arn
+                  - !Sub '${ArtifactsBucket.Arn}/*'
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - lambda:UpdateFunctionCode
+                Resource: !GetAtt LambdaFunction.Arn
+
+  CodeBuildProject:
+    Type: AWS::CodeBuild::Project
+    Properties:
+      Name: face-expression-build
+      ServiceRole: !GetAtt CodeBuildRole.Arn
+      Artifacts:
+        Type: CODEPIPELINE
+      Environment:
+        Type: LINUX_CONTAINER
+        ComputeType: BUILD_GENERAL1_SMALL
+        Image: aws/codebuild/standard:7.0
+        EnvironmentVariables:
+          - Name: WEBSITE_BUCKET
+            Value: !Ref WebsiteBucket
+          - Name: API_URL
+            Value: !Sub 'https://${HttpApi}.execute-api.${AWS::Region}.amazonaws.com/detect'
+          - Name: LAMBDA_FUNCTION_NAME
+            Value: !Ref LambdaFunction
+      Source:
+        Type: CODEPIPELINE
+        BuildSpec: buildspec.yml
+
+  # --- CodePipeline ---
+  CodePipelineRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: codepipeline.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: CodePipelinePolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - codestar-connections:UseConnection
+                  - codeconnections:UseConnection
+                Resource: !Ref GitHubConnectionArn
+              - Effect: Allow
+                Action:
+                  - codebuild:StartBuild
+                  - codebuild:BatchGetBuilds
+                Resource: !GetAtt CodeBuildProject.Arn
+              - Effect: Allow
+                Action:
+                  - s3:PutObject
+                  - s3:GetObject
+                  - s3:ListBucket
+                Resource:
+                  - !GetAtt ArtifactsBucket.Arn
+                  - !Sub '${ArtifactsBucket.Arn}/*'
+
+  Pipeline:
+    Type: AWS::CodePipeline::Pipeline
+    Properties:
+      Name: face-expression-pipeline
+      RoleArn: !GetAtt CodePipelineRole.Arn
+      ArtifactStore:
+        Type: S3
+        Location: !Ref ArtifactsBucket
+      Stages:
