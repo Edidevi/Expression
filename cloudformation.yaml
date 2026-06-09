@@ -148,4 +148,10 @@ Resources:
               - Effect: Allow
                 Action:
                   - logs:CreateLogGroup
-                  - logs:Cr
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - lambda:UpdateFunctionCode
+                Resource: !Sub 'arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:face-expression-detector'
