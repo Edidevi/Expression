@@ -252,11 +252,34 @@ Resources:
                 - Name: SourceOutput
               OutputArtifacts:
                 - Name: BuildOutput
-
+          
+  CloudFrontDistribution:
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        Enabled: true
+        DefaultRootObject: index.html
+        Origins:
+          - Id: S3Origin
+            DomainName: !Sub '${WebsiteBucket}.s3-website-${AWS::Region}.amazonaws.com'
+            CustomOriginConfig:
+              HTTPPort: 80
+              HTTPSPort: 443
+              OriginProtocolPolicy: http-only
+        DefaultCacheBehavior:
+          TargetOriginId: S3Origin
+          ViewerProtocolPolicy: redirect-to-https
+          CachePolicyId: 658327ea-f89d-4fab-a63d-7e88639e58f6
+          AllowedMethods:
+            - GET
+            - HEAD
+          CachedMethods:
+            - GET
+            - HEAD
 Outputs:
   WebsiteURL:
-    Value: !GetAtt WebsiteBucket.WebsiteURL
-    Description: Live website URL
+    Value: !Sub 'https://${CloudFrontDistribution.DomainName}'
+    Description: Live website URL (HTTPS)
   ApiURL:
     Value: !Sub 'https://${HttpApi}.execute-api.${AWS::Region}.amazonaws.com/detect'
     Description: API Gateway endpoint
