@@ -16,7 +16,6 @@ Parameters:
 
 Resources:
 
-  # --- S3: Website Bucket ---
   WebsiteBucket:
     Type: AWS::S3::Bucket
     Properties:
@@ -39,11 +38,9 @@ Resources:
             Action: s3:GetObject
             Resource: !Sub '${WebsiteBucket.Arn}/*'
 
-  # --- S3: Artifacts Bucket ---
   ArtifactsBucket:
     Type: AWS::S3::Bucket
 
-  # --- Lambda: Rekognition Handler ---
   LambdaRole:
     Type: AWS::IAM::Role
     Properties:
@@ -78,7 +75,6 @@ Resources:
           def lambda_handler(event, context):
             return {'statusCode': 200, 'body': 'placeholder'}
 
-  # --- API Gateway ---
   HttpApi:
     Type: AWS::ApiGatewayV2::Api
     Properties:
@@ -106,8 +102,7 @@ Resources:
     Properties:
       ApiId: !Ref HttpApi
       IntegrationType: AWS_PROXY
-      IntegrationUri: !Sub >-
-        arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${LambdaFunction.Arn}/invocations
+      IntegrationUri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${LambdaFunction.Arn}/invocations'
       PayloadFormatVersion: '2.0'
 
   ApiRoute:
@@ -124,7 +119,6 @@ Resources:
       StageName: '$default'
       AutoDeploy: true
 
-  # --- CodeBuild ---
   CodeBuildRole:
     Type: AWS::IAM::Role
     Properties:
@@ -154,77 +148,4 @@ Resources:
               - Effect: Allow
                 Action:
                   - logs:CreateLogGroup
-                  - logs:CreateLogStream
-                  - logs:PutLogEvents
-                Resource: '*'
-              - Effect: Allow
-                Action:
-                  - lambda:UpdateFunctionCode
-                Resource: !GetAtt LambdaFunction.Arn
-
-  CodeBuildProject:
-    Type: AWS::CodeBuild::Project
-    Properties:
-      Name: face-expression-build
-      ServiceRole: !GetAtt CodeBuildRole.Arn
-      Artifacts:
-        Type: CODEPIPELINE
-      Environment:
-        Type: LINUX_CONTAINER
-        ComputeType: BUILD_GENERAL1_SMALL
-        Image: aws/codebuild/standard:7.0
-        EnvironmentVariables:
-          - Name: WEBSITE_BUCKET
-            Value: !Ref WebsiteBucket
-          - Name: API_URL
-            Value: !Sub 'https://${HttpApi}.execute-api.${AWS::Region}.amazonaws.com/detect'
-          - Name: LAMBDA_FUNCTION_NAME
-            Value: !Ref LambdaFunction
-      Source:
-        Type: CODEPIPELINE
-        BuildSpec: buildspec.yml
-
-  # --- CodePipeline ---
-  CodePipelineRole:
-    Type: AWS::IAM::Role
-    Properties:
-      AssumeRolePolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Effect: Allow
-            Principal:
-              Service: codepipeline.amazonaws.com
-            Action: sts:AssumeRole
-      Policies:
-        - PolicyName: CodePipelinePolicy
-          PolicyDocument:
-            Version: '2012-10-17'
-            Statement:
-              - Effect: Allow
-                Action:
-                  - codestar-connections:UseConnection
-                  - codeconnections:UseConnection
-                Resource: !Ref GitHubConnectionArn
-              - Effect: Allow
-                Action:
-                  - codebuild:StartBuild
-                  - codebuild:BatchGetBuilds
-                Resource: !GetAtt CodeBuildProject.Arn
-              - Effect: Allow
-                Action:
-                  - s3:PutObject
-                  - s3:GetObject
-                  - s3:ListBucket
-                Resource:
-                  - !GetAtt ArtifactsBucket.Arn
-                  - !Sub '${ArtifactsBucket.Arn}/*'
-
-  Pipeline:
-    Type: AWS::CodePipeline::Pipeline
-    Properties:
-      Name: face-expression-pipeline
-      RoleArn: !GetAtt CodePipelineRole.Arn
-      ArtifactStore:
-        Type: S3
-        Location: !Ref ArtifactsBucket
-      Stages:
+                  - logs:Cr
