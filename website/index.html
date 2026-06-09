@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>How Are You Feeling?</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background: #0f0f0f;
+      color: #f0f0f0;
+      font-family: 'Segoe UI', sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      padding: 2rem;
+    }
+
+    h1 {
+      font-size: 2rem;
+      margin-bottom: 0.5rem;
+      letter-spacing: -0.5px;
+    }
+
+    p.subtitle {
+      color: #888;
+      margin-bottom: 2rem;
+      font-size: 0.95rem;
+    }
+
+    video, canvas {
+      border-radius: 12px;
+      width: 360px;
+      max-width: 100%;
+      background: #1a1a1a;
+    }
+
+    canvas { display: none; }
+
+    button {
+      margin-top: 1.5rem;
+      padding: 0.8rem 2rem;
+      font-size: 1rem;
+      background: #7c3aed;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+
+    button:hover { background: #6d28d9; }
+    button:disabled { background: #444; cursor: not-allowed; }
+
+    #result {
+      margin-top: 2rem;
+      text-align: center;
+    }
+
+    #emotion-label {
+      font-size: 2.5rem;
+      font-weight: 700;
+      margin-bottom: 0.25rem;
+    }
+
+    #confidence {
+      color: #888;
+      font-size: 0.9rem;
+    }
+
+    #snapshot {
+      margin-top: 1rem;
+      border-radius: 12px;
+      width: 360px;
+      max-width: 100%;
+      display: none;
+    }
+
+    .emoji { font-size: 3rem; margin-bottom: 0.5rem; }
+  </style>
+</head>
+<body>
+
+  <h1>How Are You Feeling?</h1>
+  <p class="subtitle">We'll take a quick snap and let AWS decide 🤖</p>
+
+  <video id="video" autoplay playsinline></video>
+  <canvas id="canvas"></canvas>
+
+  <button id="snapBtn" onclick="snap()">📸 Allow Camera & Snap</button>
+
+  <div id="result" style="display:none">
+    <img id="snapshot" alt="Your photo" />
+    <div class="emoji" id="emoji"></div>
+    <div id="emotion-label"></div>
+    <div id="confidence"></div>
+  </div>
+
+  <script>
+    const API_URL = '__API_URL__';
+
+    const emojiMap = {
+      HAPPY: '😄', SAD: '😢', ANGRY: '😠', SURPRISED: '😲',
+      DISGUSTED: '🤢', CONFUSED: '😕', CALM: '😌', FEAR: '😨'
+    };
+
+    const video = document.getElementById('video');
+    const canvas = document.getElementById('canvas');
+    const btn = document.getElementById('snapBtn');
+
+    // Start camera on load
+    navigator.mediaDevices.getUserMedia({ video: true })
+      .then(stream => { video.srcObject = stream; })
+      .catch(() => { btn.textContent = '❌ Camera access denied'; btn.disabled = true; });
+
+    async function snap() {
+      btn.disabled = true;
+      btn.textContent = 'Analysing...';
+
+      // Draw frame from video to canvas
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      canvas.getContext('2d').drawImage(video, 0, 0);
+
+      // Show snapshot
+      const snapshot = document.getElementById('snapshot');
+      snapshot.src = canvas.toDataURL('image/jpeg');
+      snapshot.style.display = 'block';
+
+      // Strip base64 header and send to Lambda
+      const base64 = canvas.toDataURL('image/jpeg').split(',')[1];
+
+      try {
+        const res = await fetch(API_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ image: base64 })
+        });
+
+        const data = await res.json();
+        const emotion = data.emotion || 'UNKNOWN';
+        const confidence = data.confidence || 0;
+
+        document.getElementById('emoji').textContent = emojiMap[emotion] || '🤔';
+        document.getElementById('emotion-label').textContent = emotion;
+        document.getElementById('confidence').textContent = `${confidence}% confidence`;
+        document.getElementById('result').style.display = 'block';
+
+      } catch (err) {
+        document.getElementById('emotion-label').textContent = 'Something went wrong';
+        document.getElementById('result').style.display = 'block';
+      }
+
+      btn.textContent = '📸 Snap Again';
+      btn.disabled = false;
+    }
+  </script>
+
+</body>
+</html>
