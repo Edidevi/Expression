@@ -70,8 +70,9 @@ Do not start with "I" and do not mention that you are an AI."""
         return result['content'][0]['text']
 
     except Exception as e:
-        return f"Remember that it's okay to feel {emotion.lower()}. Try taking a few slow deep breaths and be kind to yourself right now."
-
+        print(f"Bedrock error: {str(e)}")
+        return f"Remember that it's okay to feel {emotion.lower()}..."
+    
 def detect_emotion(event, user_id):
     try:
         body = json.loads(event['body'])
