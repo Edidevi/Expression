@@ -261,3 +261,9 @@ Outputs:
   CloudFrontDistributionId:
     Value: !Ref CloudFrontDistribution
     Description: CloudFront Distribution ID (for cache invalidation)
+  WebsiteBucketName:
+    Value: !Ref WebsiteBucket
+    Description: Website S3 bucket name
+  LambdaFunctionName:
+    Value: !Ref LambdaFunction
+    Description: Lambda function name
