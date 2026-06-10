@@ -8,6 +8,7 @@ from datetime import datetime
 rekognition = boto3.client('rekognition')
 s3 = boto3.client('s3')
 dynamodb = boto3.resource('dynamodb')
+bedrock = boto3.client('bedrock-runtime', region_name='us-east-1')
 
 BUCKET = os.environ['WEBSITE_BUCKET']
 TABLE = os.environ['DYNAMODB_TABLE']
@@ -26,8 +27,6 @@ def lambda_handler(event, context):
         return get_entries(user_id)
     elif method == 'POST' and path == '/resolve':
         return resolve_entry(event, user_id)
-    elif method == 'GET' and path == '/suggest':
-        return get_suggestion(event, user_id)
     else:
         return response(404, {'error': 'Not found'})
 
@@ -37,6 +36,41 @@ def get_user_id(event):
         return claims['sub']
     except:
         return None
+
+def get_advice(emotion, reason, previous_resolutions):
+    try:
+        previous_text = ''
+        if previous_resolutions:
+            previous_text = f"In the past when they felt {emotion}, what helped them was: {', '.join(previous_resolutions[-3:])}."
+
+        prompt = f"""You are a compassionate mental health support assistant. 
+A person is feeling {emotion}.
+{f'They say: "{reason}"' if reason else ''}
+{previous_text}
+
+Give them warm, practical, evidence-based advice in 3-4 sentences. 
+Include one specific technique they can try right now.
+Be conversational, kind and non-clinical.
+Do not start with "I" and do not mention that you are an AI."""
+
+        response_body = bedrock.invoke_model(
+            modelId='anthropic.claude-haiku-4-5',
+            contentType='application/json',
+            accept='application/json',
+            body=json.dumps({
+                'anthropic_version': 'bedrock-2023-05-31',
+                'max_tokens': 300,
+                'messages': [
+                    {'role': 'user', 'content': prompt}
+                ]
+            })
+        )
+
+        result = json.loads(response_body['body'].read())
+        return result['content'][0]['text']
+
+    except Exception as e:
+        return f"Remember that it's okay to feel {emotion.lower()}. Try taking a few slow deep breaths and be kind to yourself right now."
 
 def detect_emotion(event, user_id):
     try:
@@ -67,10 +101,21 @@ def detect_emotion(event, user_id):
             ContentType='image/jpeg'
         )
 
+        # Get previous resolutions for this emotion
+        table = dynamodb.Table(TABLE)
+        previous = get_previous_resolutions(user_id, emotion, table)
+
+        # Get AI advice
+        advice = get_advice(emotion, reason, previous)
+
+        # Get personal suggestion from history
+        personal_suggestion = None
+        if previous:
+            personal_suggestion = f"Last time you felt {emotion}, what helped you was: {previous[-1]}"
+
         # Save entry to DynamoDB
         entry_id = str(uuid.uuid4())
         timestamp = datetime.utcnow().isoformat()
-        table = dynamodb.Table(TABLE)
         table.put_item(Item={
             'userId': user_id,
             'entryId': entry_id,
@@ -83,18 +128,29 @@ def detect_emotion(event, user_id):
             'resolution': ''
         })
 
-        # Check for previous similar mood suggestion
-        suggestion = get_previous_suggestion(user_id, emotion, table)
-
         return response(200, {
             'emotion': emotion,
             'confidence': confidence,
             'entryId': entry_id,
-            'suggestion': suggestion
+            'advice': advice,
+            'personalSuggestion': personal_suggestion
         })
 
     except Exception as e:
         return response(500, {'error': str(e)})
+
+def get_previous_resolutions(user_id, emotion, table):
+    try:
+        result = table.query(
+            KeyConditionExpression=boto3.dynamodb.conditions.Key('userId').eq(user_id)
+        )
+        resolved = [
+            i['resolution'] for i in result['Items']
+            if i['emotion'] == emotion and i.get('resolved') and i.get('resolution')
+        ]
+        return resolved
+    except:
+        return []
 
 def get_entries(user_id):
     try:
@@ -104,7 +160,6 @@ def get_entries(user_id):
         )
         items = sorted(result['Items'], key=lambda x: x['timestamp'], reverse=True)
 
-        # Add photo URLs
         for item in items:
             if item.get('photoKey'):
                 item['photoUrl'] = f'https://{BUCKET}.s3.amazonaws.com/{item["photoKey"]}'
@@ -117,54 +172,21 @@ def resolve_entry(event, user_id):
     try:
         body = json.loads(event['body'])
         entry_id = body['entryId']
-        resolution = body['resolution']
+        resolution = body.get('resolution', '')
+        reason = body.get('reason', '')
 
         table = dynamodb.Table(TABLE)
         table.update_item(
             Key={'userId': user_id, 'entryId': entry_id},
-            UpdateExpression='SET resolved = :r, resolution = :res',
-            ExpressionAttributeValues={':r': True, ':res': resolution}
+            UpdateExpression='SET resolved = :r, resolution = :res, reason = :reason',
+            ExpressionAttributeValues={
+                ':r': True if resolution else False,
+                ':res': resolution,
+                ':reason': reason
+            }
         )
 
         return response(200, {'message': 'Entry updated'})
-    except Exception as e:
-        return response(500, {'error': str(e)})
-
-def get_previous_suggestion(user_id, emotion, table):
-    try:
-        result = table.query(
-            KeyConditionExpression=boto3.dynamodb.conditions.Key('userId').eq(user_id)
-        )
-        previous = [
-            i for i in result['Items']
-            if i['emotion'] == emotion and i.get('resolved') and i.get('resolution')
-        ]
-        if previous:
-            latest = sorted(previous, key=lambda x: x['timestamp'], reverse=True)[0]
-            return f"Last time you felt {emotion}, what helped you was: {latest['resolution']}"
-        return None
-    except:
-        return None
-
-def get_suggestion(event, user_id):
-    try:
-        emotion = event.get('queryStringParameters', {}).get('emotion', '')
-        table = dynamodb.Table(TABLE)
-        result = table.query(
-            KeyConditionExpression=boto3.dynamodb.conditions.Key('userId').eq(user_id)
-        )
-        resolved = [
-            i for i in result['Items']
-            if i['emotion'] == emotion and i.get('resolved') and i.get('resolution')
-        ]
-        if not resolved:
-            return response(200, {'suggestion': None})
-
-        resolutions = [i['resolution'] for i in resolved]
-        return response(200, {
-            'suggestion': f"Last time you felt {emotion}, what helped was: {resolutions[-1]}",
-            'history': resolutions
-        })
     except Exception as e:
         return response(500, {'error': str(e)})
 
