@@ -345,11 +345,19 @@ Resources:
                   - codestar-connections:UseConnection
                   - codeconnections:UseConnection
                 Resource: !Ref GitHubConnectionArn
-              - Effect: Allow
+              - - Effect: Allow
                 Action:
                   - codebuild:StartBuild
                   - codebuild:BatchGetBuilds
                 Resource: !GetAtt CodeBuildProject.Arn
+              - Effect: Allow
+                Action:
+                  - cloudformation:CreateStack
+                  - cloudformation:UpdateStack
+                  - cloudformation:DescribeStacks
+                  - cloudformation:DescribeStackEvents
+                  - iam:PassRole
+                Resource: '*'
               - Effect: Allow
                 Action:
                   - s3:PutObject
@@ -399,6 +407,38 @@ Resources:
                 - Name: SourceOutput
               OutputArtifacts:
                 - Name: BuildOutput
+                
+        - Name: Deploy
+          Actions:
+            - Name: DeployStack
+              ActionTypeId:
+                Category: Deploy
+                Owner: AWS
+                Provider: CloudFormation
+                Version: '1'
+              RunOrder: 1
+              Configuration:
+                ActionMode: CREATE_UPDATE
+                StackName: mood-journal
+                TemplatePath: BuildOutput::cloudformation.yaml
+                Capabilities: CAPABILITY_IAM
+                RoleArn: !GetAtt CloudFormationDeployRole.Arn
+              InputArtifacts:
+                - Name: BuildOutput
+
+CloudFormationDeployRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: cloudformation.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AdministratorAccess
+      
 
 Outputs:
   WebsiteURL:
