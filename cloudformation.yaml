@@ -345,7 +345,7 @@ Resources:
                   - codestar-connections:UseConnection
                   - codeconnections:UseConnection
                 Resource: !Ref GitHubConnectionArn
-              - - Effect: Allow
+              - Effect: Allow
                 Action:
                   - codebuild:StartBuild
                   - codebuild:BatchGetBuilds
@@ -426,7 +426,7 @@ Resources:
               InputArtifacts:
                 - Name: BuildOutput
 
-CloudFormationDeployRole:
+  CloudFormationDeployRole:
     Type: AWS::IAM::Role
     Properties:
       AssumeRolePolicyDocument:
@@ -438,7 +438,7 @@ CloudFormationDeployRole:
             Action: sts:AssumeRole
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/AdministratorAccess
-      
+
 
 Outputs:
   WebsiteURL:
