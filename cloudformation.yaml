@@ -162,8 +162,95 @@ Resources:
           CLOUDFRONT_DOMAIN: !GetAtt CloudFrontDistribution.DomainName
       Code:
         ZipFile: |
+          import json
+          import boto3
+          import os
+          import uuid
+          from datetime import datetime
+
+          # Initialize AWS Clients
+          bedrock = boto3.client(service_name='bedrock-runtime', region_name='us-east-1')
+          dynamodb = boto3.resource('dynamodb')
+          table = dynamodb.Table(os.environ['DYNAMODB_TABLE'])
+
           def lambda_handler(event, context):
-            return {'statusCode': 200, 'body': 'placeholder'}
+              try:
+                  route_key = event.get('routeKey', '')
+                  user_id = event.get('requestContext', {}).get('authorizer', {}).get('jwt', {}).get('claims', {}).get('sub', 'anonymous')
+                  
+                  headers = {
+                      'Content-Type': 'application/json',
+                      'Access-Control-Allow-Origin': '*'
+                  }
+
+                  if 'GET /entries' in route_key:
+                      response = table.query(
+                          KeyConditionExpression=boto3.dynamodb.conditions.Key('userId').eq(user_id)
+                      )
+                      return {'statusCode': 200, 'headers': headers, 'body': json.dumps(response.get('Items', []))}
+
+                  elif 'POST /detect' in route_key or 'POST /resolve' in route_key:
+                      body = json.loads(event.get('body', '{}'))
+                      user_mood = body.get('mood', 'neutral')
+                      expressions = body.get('expressions', 'no clear visual expressions logged')
+                      journal_text = body.get('text', '')
+
+                      prompt = (
+                          f"The user logged a journal entry.\n"
+                          f"User Mood Statement: {user_mood}\n"
+                          f"Detected Visual Expressions: {expressions}\n"
+                          f"Journal Text Description: {journal_text}\n\n"
+                          f"Provide a deeply compassionate, empathetic, and encouraging 2-sentence piece of therapeutic mental well-being advice based directly on their state. Do not include any placeholder metadata headers."
+                      )
+
+                      native_request = {
+                          "anthropic_version": "bedrock-2023-05-31",
+                          "max_tokens": 300,
+                          "messages": [
+                              {"role": "user", "content": [{"type": "text", "text": prompt}]}
+                          ]
+                      }
+
+                      ai_response = bedrock.invoke_model(
+                          modelId="anthropic.claude-sonnet-4-6",
+                          body=json.dumps(native_request)
+                      )
+                      
+                      response_body = json.loads(ai_response.get('body').read())
+                      # ✅ Fully Verified: Added [0] index to accurately extract text property from the array
+                      ai_advice = response_body['content'][0]['text']
+
+                      entry_id = str(uuid.uuid4())
+                      table.put_item(
+                          Item={
+                              'userId': user_id,
+                              'entryId': entry_id,
+                              'timestamp': datetime.utcnow().isoformat(),
+                              'mood': user_mood,
+                              'expressions': expressions,
+                              'text': journal_text,
+                              'advice': ai_advice
+                          }
+                      )
+
+                      return {
+                          'statusCode': 200,
+                          'headers': headers,
+                          'body': json.dumps({'advice': ai_advice, 'entryId': entry_id})
+                      }
+
+                  return {
+                      'statusCode': 404,
+                      'headers': headers,
+                      'body': json.dumps({'message': 'Requested API route target interface path index not found.'})
+                  }
+
+              except Exception as e:
+                  return {
+                      'statusCode': 500,
+                      'headers': {'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*'},
+                      'body': json.dumps({'error': str(e)})
+                  }
 
   # --- API Gateway ---
   HttpApi:
