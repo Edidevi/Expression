@@ -1,24 +1,12 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: Mood Journal - Personal mood tracker with Rekognition and Cognito
+Description: Mood Journal - App stack (managed by pipeline)
 
-Parameters:
-  GitHubOwner:
-    Type: String
-    Default: Edidevi
-  GitHubRepo:
-    Type: String
-    Default: Expression
-  GitHubBranch:
-    Type: String
-    Default: main
-  GitHubConnectionArn: 
-    Type: String
-    Default: arn:aws:codeconnections:us-east-1:843875214129:connection/90c83649-5bca-4d6c-a2fd-955d7cd4f024
 Resources:
 
   # --- S3: Website Bucket ---
   WebsiteBucket:
     Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
     Properties:
       WebsiteConfiguration:
         IndexDocument: index.html
@@ -44,13 +32,10 @@ Resources:
             Action: s3:GetObject
             Resource: !Sub '${WebsiteBucket.Arn}/*'
 
-  # --- S3: Artifacts Bucket ---
-  ArtifactsBucket:
-    Type: AWS::S3::Bucket
-
   # --- DynamoDB ---
   MoodTable:
     Type: AWS::DynamoDB::Table
+    DeletionPolicy: Retain
     Properties:
       TableName: !Sub "${AWS::StackName}-entries"
       BillingMode: PAY_PER_REQUEST
@@ -68,6 +53,7 @@ Resources:
   # --- Cognito ---
   UserPool:
     Type: AWS::Cognito::UserPool
+    DeletionPolicy: Retain
     Properties:
       UserPoolName: mood-journal-users
       AutoVerifiedAttributes:
@@ -126,13 +112,13 @@ Resources:
                   - dynamodb:PutItem
                   - dynamodb:GetItem
                   - dynamodb:UpdateItem
+                  - dynamodb:DeleteItem
                   - dynamodb:Query
                 Resource: !GetAtt MoodTable.Arn
               - Effect: Allow
                 Action:
                   - bedrock:InvokeModel
-                Resource: 'arn:aws:bedrock:us-east-1::foundation-model/anthropic.claude-haiku-4-5'
-
+                Resource: 'arn:aws:bedrock:us-east-1::foundation-model/anthropic.claude-3-haiku-20240307-v1:0'
 
   LambdaFunction:
     Type: AWS::Lambda::Function
@@ -146,6 +132,9 @@ Resources:
         Variables:
           WEBSITE_BUCKET: !Ref WebsiteBucket
           DYNAMODB_TABLE: !Ref MoodTable
+          COGNITO_USER_POOL_ID: !Ref UserPool
+          COGNITO_CLIENT_ID: !Ref UserPoolClient
+          CLOUDFRONT_DOMAIN: !GetAtt CloudFrontDistribution.DomainName
       Code:
         ZipFile: |
           def lambda_handler(event, context):
@@ -224,15 +213,6 @@ Resources:
       AuthorizerId: !Ref JwtAuthorizer
       Target: !Sub 'integrations/${ApiIntegration}'
 
-  RouteSuggest:
-    Type: AWS::ApiGatewayV2::Route
-    Properties:
-      ApiId: !Ref HttpApi
-      RouteKey: 'GET /suggest'
-      AuthorizationType: JWT
-      AuthorizerId: !Ref JwtAuthorizer
-      Target: !Sub 'integrations/${ApiIntegration}'
-
   ApiStage:
     Type: AWS::ApiGatewayV2::Stage
     Properties:
@@ -265,186 +245,6 @@ Resources:
             - GET
             - HEAD
 
-  # --- CodeBuild ---
-  CodeBuildRole:
-    Type: AWS::IAM::Role
-    Properties:
-      AssumeRolePolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Effect: Allow
-            Principal:
-              Service: codebuild.amazonaws.com
-            Action: sts:AssumeRole
-      Policies:
-        - PolicyName: CodeBuildPolicy
-          PolicyDocument:
-            Version: '2012-10-17'
-            Statement:
-              - Effect: Allow
-                Action:
-                  - s3:PutObject
-                  - s3:DeleteObject
-                  - s3:GetObject
-                  - s3:ListBucket
-                Resource:
-                  - !GetAtt WebsiteBucket.Arn
-                  - !Sub '${WebsiteBucket.Arn}/*'
-                  - !GetAtt ArtifactsBucket.Arn
-                  - !Sub '${ArtifactsBucket.Arn}/*'
-              - Effect: Allow
-                Action:
-                  - logs:CreateLogGroup
-                  - logs:CreateLogStream
-                  - logs:PutLogEvents
-                Resource: '*'
-              - Effect: Allow
-                Action:
-                  - lambda:UpdateFunctionCode
-                Resource: !Sub 'arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:mood-journal-handler'
-
-  CodeBuildProject:
-    Type: AWS::CodeBuild::Project
-    Properties:
-      Name: mood-journal-build
-      ServiceRole: !GetAtt CodeBuildRole.Arn
-      Artifacts:
-        Type: CODEPIPELINE
-      Environment:
-        Type: LINUX_CONTAINER
-        ComputeType: BUILD_GENERAL1_SMALL
-        Image: aws/codebuild/standard:7.0
-        EnvironmentVariables:
-          - Name: WEBSITE_BUCKET
-            Value: !Ref WebsiteBucket
-          - Name: API_URL
-            Value: !Sub 'https://${HttpApi}.execute-api.${AWS::Region}.amazonaws.com'
-          - Name: LAMBDA_FUNCTION_NAME
-            Value: !Ref LambdaFunction
-          - Name: COGNITO_USER_POOL_ID
-            Value: !Ref UserPool
-          - Name: COGNITO_CLIENT_ID
-            Value: !Ref UserPoolClient
-      Source:
-        Type: CODEPIPELINE
-        BuildSpec: buildspec.yml
-
-  # --- CodePipeline ---
-  CodePipelineRole:
-    Type: AWS::IAM::Role
-    Properties:
-      AssumeRolePolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Effect: Allow
-            Principal:
-              Service: codepipeline.amazonaws.com
-            Action: sts:AssumeRole
-      Policies:
-        - PolicyName: CodePipelinePolicy
-          PolicyDocument:
-            Version: '2012-10-17'
-            Statement:
-              - Effect: Allow
-                Action:
-                  - codestar-connections:UseConnection
-                  - codeconnections:UseConnection
-                Resource: !Ref GitHubConnectionArn
-              - Effect: Allow
-                Action:
-                  - codebuild:StartBuild
-                  - codebuild:BatchGetBuilds
-                Resource: !GetAtt CodeBuildProject.Arn
-              - Effect: Allow
-                Action:
-                  - cloudformation:CreateStack
-                  - cloudformation:UpdateStack
-                  - cloudformation:DescribeStacks
-                  - cloudformation:DescribeStackEvents
-                  - iam:PassRole
-                Resource: '*'
-              - Effect: Allow
-                Action:
-                  - s3:PutObject
-                  - s3:GetObject
-                  - s3:ListBucket
-                Resource:
-                  - !GetAtt ArtifactsBucket.Arn
-                  - !Sub '${ArtifactsBucket.Arn}/*'
-
-  Pipeline:
-    Type: AWS::CodePipeline::Pipeline
-    Properties:
-      Name: mood-journal-pipeline
-      RoleArn: !GetAtt CodePipelineRole.Arn
-      ArtifactStore:
-        Type: S3
-        Location: !Ref ArtifactsBucket
-      Stages:
-        - Name: Source
-          Actions:
-            - Name: GitHub
-              ActionTypeId:
-                Category: Source
-                Owner: AWS
-                Provider: CodeStarSourceConnection
-                Version: '1'
-              RunOrder: 1
-              Configuration:
-                ConnectionArn: !Ref GitHubConnectionArn
-                FullRepositoryId: !Sub '${GitHubOwner}/${GitHubRepo}'
-                BranchName: !Ref GitHubBranch
-                OutputArtifactFormat: CODE_ZIP
-              OutputArtifacts:
-                - Name: SourceOutput
-        - Name: Build
-          Actions:
-            - Name: Build
-              ActionTypeId:
-                Category: Build
-                Owner: AWS
-                Provider: CodeBuild
-                Version: '1'
-              RunOrder: 1
-              Configuration:
-                ProjectName: !Ref CodeBuildProject
-              InputArtifacts:
-                - Name: SourceOutput
-              OutputArtifacts:
-                - Name: BuildOutput
-                
-        - Name: Deploy
-          Actions:
-            - Name: DeployStack
-              ActionTypeId:
-                Category: Deploy
-                Owner: AWS
-                Provider: CloudFormation
-                Version: '1'
-              RunOrder: 1
-              Configuration:
-                ActionMode: CREATE_UPDATE
-                StackName: mood-journal
-                TemplatePath: BuildOutput::cloudformation.yaml
-                Capabilities: CAPABILITY_IAM
-                RoleArn: !GetAtt CloudFormationDeployRole.Arn
-              InputArtifacts:
-                - Name: BuildOutput
-
-  CloudFormationDeployRole:
-    Type: AWS::IAM::Role
-    Properties:
-      AssumeRolePolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Effect: Allow
-            Principal:
-              Service: cloudformation.amazonaws.com
-            Action: sts:AssumeRole
-      ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/AdministratorAccess
-
-
 Outputs:
   WebsiteURL:
     Value: !Sub 'https://${CloudFrontDistribution.DomainName}'
@@ -458,3 +258,6 @@ Outputs:
   UserPoolClientId:
     Value: !Ref UserPoolClient
     Description: Cognito Client ID
+  CloudFrontDistributionId:
+    Value: !Ref CloudFrontDistribution
+    Description: CloudFront Distribution ID (for cache invalidation)
