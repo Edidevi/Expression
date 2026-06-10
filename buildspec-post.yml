@@ -3,31 +3,26 @@ phases:
   build:
     commands:
       - echo "Fetching app stack outputs"
-      - WEBSITE_BUCKET=$(aws cloudformation describe-stacks --stack-name $APP_STACK_NAME --query "Stacks[0].Outputs[?OutputKey=='WebsiteBucketName'].OutputValue" --output text)
-      - API_URL=$(aws cloudformation describe-stacks --stack-name $APP_STACK_NAME --query "Stacks[0].Outputs[?OutputKey=='ApiURL'].OutputValue" --output text)
-      - COGNITO_USER_POOL_ID=$(aws cloudformation describe-stacks --stack-name $APP_STACK_NAME --query "Stacks[0].Outputs[?OutputKey=='UserPoolId'].OutputValue" --output text)
-      - COGNITO_CLIENT_ID=$(aws cloudformation describe-stacks --stack-name $APP_STACK_NAME --query "Stacks[0].Outputs[?OutputKey=='UserPoolClientId'].OutputValue" --output text)
-      - LAMBDA_FUNCTION_NAME=$(aws cloudformation describe-stacks --stack-name $APP_STACK_NAME --query "Stacks[0].Outputs[?OutputKey=='LambdaFunctionName'].OutputValue" --output text)
-      - CF_DISTRIBUTION_ID=$(aws cloudformation describe-stacks --stack-name $APP_STACK_NAME --query "Stacks[0].Outputs[?OutputKey=='CloudFrontDistributionId'].OutputValue" --output text)
-
+      - WEBSITE_BUCKET=$(aws cloudformation describe-stacks --stack-name $APP_STACK_NAME --query 'Stacks[0].Outputs[?OutputKey==`WebsiteBucketName`].OutputValue' --output text)
+      - API_URL=$(aws cloudformation describe-stacks --stack-name $APP_STACK_NAME --query 'Stacks[0].Outputs[?OutputKey==`ApiURL`].OutputValue' --output text)
+      - COGNITO_USER_POOL_ID=$(aws cloudformation describe-stacks --stack-name $APP_STACK_NAME --query 'Stacks[0].Outputs[?OutputKey==`UserPoolId`].OutputValue' --output text)
+      - COGNITO_CLIENT_ID=$(aws cloudformation describe-stacks --stack-name $APP_STACK_NAME --query 'Stacks[0].Outputs[?OutputKey==`UserPoolClientId`].OutputValue' --output text)
+      - LAMBDA_FUNCTION_NAME=$(aws cloudformation describe-stacks --stack-name $APP_STACK_NAME --query 'Stacks[0].Outputs[?OutputKey==`LambdaFunctionName`].OutputValue' --output text)
+      - CF_DISTRIBUTION_ID=$(aws cloudformation describe-stacks --stack-name $APP_STACK_NAME --query 'Stacks[0].Outputs[?OutputKey==`CloudFrontDistributionId`].OutputValue' --output text)
       - echo "Validating outputs"
-      - test -n "$WEBSITE_BUCKET" || (echo "ERROR: WEBSITE_BUCKET is empty" && exit 1)
-      - test -n "$API_URL" || (echo "ERROR: API_URL is empty" && exit 1)
-      - test -n "$COGNITO_USER_POOL_ID" || (echo "ERROR: COGNITO_USER_POOL_ID is empty" && exit 1)
-      - test -n "$COGNITO_CLIENT_ID" || (echo "ERROR: COGNITO_CLIENT_ID is empty" && exit 1)
-      - test -n "$LAMBDA_FUNCTION_NAME" || (echo "ERROR: LAMBDA_FUNCTION_NAME is empty" && exit 1)
-      - test -n "$CF_DISTRIBUTION_ID" || (echo "ERROR: CF_DISTRIBUTION_ID is empty" && exit 1)
-
+      - test -n "$WEBSITE_BUCKET" || (echo "ERROR WEBSITE_BUCKET is empty" && exit 1)
+      - test -n "$API_URL" || (echo "ERROR API_URL is empty" && exit 1)
+      - test -n "$COGNITO_USER_POOL_ID" || (echo "ERROR COGNITO_USER_POOL_ID is empty" && exit 1)
+      - test -n "$COGNITO_CLIENT_ID" || (echo "ERROR COGNITO_CLIENT_ID is empty" && exit 1)
+      - test -n "$LAMBDA_FUNCTION_NAME" || (echo "ERROR LAMBDA_FUNCTION_NAME is empty" && exit 1)
+      - test -n "$CF_DISTRIBUTION_ID" || (echo "ERROR CF_DISTRIBUTION_ID is empty" && exit 1)
       - echo "Injecting config into index.html"
       - sed -i "s|__API_URL__|$API_URL|g" website/index.html
       - sed -i "s|__COGNITO_USER_POOL_ID__|$COGNITO_USER_POOL_ID|g" website/index.html
       - sed -i "s|__COGNITO_CLIENT_ID__|$COGNITO_CLIENT_ID|g" website/index.html
-
       - echo "Updating Lambda function code"
       - aws lambda update-function-code --function-name $LAMBDA_FUNCTION_NAME --zip-file fileb://lambda.zip
-
       - echo "Syncing website to S3"
       - aws s3 sync website/ s3://$WEBSITE_BUCKET --delete
-
       - echo "Invalidating CloudFront cache"
       - aws cloudfront create-invalidation --distribution-id $CF_DISTRIBUTION_ID --paths "/*"
