@@ -55,7 +55,7 @@ Resources:
     Type: AWS::Cognito::UserPool
     DeletionPolicy: Retain
     Properties:
-      UserPoolName: mood-journal-users
+      UserPoolName: !Sub '${AWS::StackName}-users'
       AutoVerifiedAttributes:
         - email
       UsernameAttributes:
@@ -71,12 +71,37 @@ Resources:
   UserPoolClient:
     Type: AWS::Cognito::UserPoolClient
     Properties:
-      ClientName: mood-journal-client
+      ClientName: !Sub '${AWS::StackName}-client'
       UserPoolId: !Ref UserPool
       ExplicitAuthFlows:
         - ALLOW_USER_SRP_AUTH
         - ALLOW_REFRESH_TOKEN_AUTH
       GenerateSecret: false
+
+  # --- CloudFront (defined before Lambda to avoid circular dependency) ---
+  CloudFrontDistribution:
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        Enabled: true
+        DefaultRootObject: index.html
+        Origins:
+          - Id: S3Origin
+            DomainName: !Sub '${WebsiteBucket}.s3-website-${AWS::Region}.amazonaws.com'
+            CustomOriginConfig:
+              HTTPPort: 80
+              HTTPSPort: 443
+              OriginProtocolPolicy: http-only
+        DefaultCacheBehavior:
+          TargetOriginId: S3Origin
+          ViewerProtocolPolicy: redirect-to-https
+          CachePolicyId: 658327ea-f89d-4fab-a63d-7e88639e58f6
+          AllowedMethods:
+            - GET
+            - HEAD
+          CachedMethods:
+            - GET
+            - HEAD
 
   # --- Lambda ---
   LambdaRole:
@@ -220,31 +245,6 @@ Resources:
       StageName: '$default'
       AutoDeploy: true
 
-  # --- CloudFront ---
-  CloudFrontDistribution:
-    Type: AWS::CloudFront::Distribution
-    Properties:
-      DistributionConfig:
-        Enabled: true
-        DefaultRootObject: index.html
-        Origins:
-          - Id: S3Origin
-            DomainName: !Sub '${WebsiteBucket}.s3-website-${AWS::Region}.amazonaws.com'
-            CustomOriginConfig:
-              HTTPPort: 80
-              HTTPSPort: 443
-              OriginProtocolPolicy: http-only
-        DefaultCacheBehavior:
-          TargetOriginId: S3Origin
-          ViewerProtocolPolicy: redirect-to-https
-          CachePolicyId: 658327ea-f89d-4fab-a63d-7e88639e58f6
-          AllowedMethods:
-            - GET
-            - HEAD
-          CachedMethods:
-            - GET
-            - HEAD
-
 Outputs:
   WebsiteURL:
     Value: !Sub 'https://${CloudFrontDistribution.DomainName}'
@@ -260,7 +260,7 @@ Outputs:
     Description: Cognito Client ID
   CloudFrontDistributionId:
     Value: !Ref CloudFrontDistribution
-    Description: CloudFront Distribution ID (for cache invalidation)
+    Description: CloudFront Distribution ID
   WebsiteBucketName:
     Value: !Ref WebsiteBucket
     Description: Website S3 bucket name
