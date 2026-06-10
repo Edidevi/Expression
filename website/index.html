@@ -344,7 +344,7 @@
         <div id="reason-box" class="reason-box" style="display:none;">
           <label>What's making you feel this way?</label>
           <textarea id="reason-input" placeholder="Write about how you're feeling..."></textarea>
-          <button class="btn" onclick="saveReason()" style="max-width:400px;">Save entry</button>
+          <button class="btn" onclick="submitSnap()" style="max-width:400px;">Get advice & save</button>
         </div>
       </div>
 
@@ -461,12 +461,27 @@
       video.style.display = 'none';
 
       const base64 = canvas.toDataURL('image/jpeg').split(',')[1];
+      window._pendingImage = base64;
+
+      document.getElementById('emotion-result').style.display = 'none';
+      document.getElementById('suggestion-box').style.display = 'none';
+      document.getElementById('reason-box').style.display = 'block';
+      document.getElementById('snapBtn').textContent = '📸 Snap again';
+      document.getElementById('snapBtn').disabled = false;
+      document.getElementById('reason-box').style.display = 'none';
+      document.getElementById('reason-input').value = '';
+      loadEntries();
+    }
+
+    async function submitSnap() {
+      const reason = document.getElementById('reason-input').value;
+      const base64 = window._pendingImage;
 
       try {
         const res = await fetch(`${API_URL}/detect`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'Authorization': currentToken },
-          body: JSON.stringify({ image: base64, reason: '' })
+          body: JSON.stringify({ image: base64, reason: reason })
         });
 
         const data = await res.json();
@@ -480,9 +495,15 @@
         document.getElementById('emotion-result').style.display = 'block';
         document.getElementById('reason-box').style.display = 'block';
 
-        if (data.suggestion) {
+            if (data.advice) {
           const box = document.getElementById('suggestion-box');
-          box.textContent = '💡 ' + data.suggestion;
+          box.innerHTML = '🧠 <strong>Advice for you:</strong><br><br>' + data.advice;
+          box.style.display = 'block';
+        }
+
+        if (data.personalSuggestion) {
+          const box = document.getElementById('suggestion-box');
+          box.innerHTML += '<br><br>💜 <strong>From your history:</strong><br>' + data.personalSuggestion;
           box.style.display = 'block';
         }
 
