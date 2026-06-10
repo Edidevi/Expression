@@ -13,7 +13,7 @@ Parameters:
     Default: main
   GitHubConnectionArn: 
     Type: String
-    Defualt: arn:aws:codeconnections:us-east-1:843875214129:connection/90c83649-5bca-4d6c-a2fd-955d7cd4f024
+    Default: arn:aws:codeconnections:us-east-1:843875214129:connection/90c83649-5bca-4d6c-a2fd-955d7cd4f024
 Resources:
 
   # --- S3: Website Bucket ---
