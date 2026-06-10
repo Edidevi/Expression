@@ -52,7 +52,7 @@ Resources:
   MoodTable:
     Type: AWS::DynamoDB::Table
     Properties:
-      TableName: mood-journal-entries
+      TableName: !Sub "${AWS::StackName}-entries"
       BillingMode: PAY_PER_REQUEST
       AttributeDefinitions:
         - AttributeName: userId
