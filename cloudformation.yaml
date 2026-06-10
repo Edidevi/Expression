@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: Face Expression Lab - Website with Rekognition
+Description: Mood Journal - Personal mood tracker with Rekognition and Cognito
 
 Parameters:
   GitHubOwner:
@@ -16,6 +16,7 @@ Parameters:
 
 Resources:
 
+  # --- S3: Website Bucket ---
   WebsiteBucket:
     Type: AWS::S3::Bucket
     Properties:
@@ -26,6 +27,11 @@ Resources:
         BlockPublicPolicy: false
         IgnorePublicAcls: false
         RestrictPublicBuckets: false
+      CorsConfiguration:
+        CorsRules:
+          - AllowedHeaders: ['*']
+            AllowedMethods: [GET]
+            AllowedOrigins: ['*']
 
   WebsiteBucketPolicy:
     Type: AWS::S3::BucketPolicy
@@ -38,9 +44,55 @@ Resources:
             Action: s3:GetObject
             Resource: !Sub '${WebsiteBucket.Arn}/*'
 
+  # --- S3: Artifacts Bucket ---
   ArtifactsBucket:
     Type: AWS::S3::Bucket
 
+  # --- DynamoDB ---
+  MoodTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: mood-journal-entries
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: userId
+          AttributeType: S
+        - AttributeName: entryId
+          AttributeType: S
+      KeySchema:
+        - AttributeName: userId
+          KeyType: HASH
+        - AttributeName: entryId
+          KeyType: RANGE
+
+  # --- Cognito ---
+  UserPool:
+    Type: AWS::Cognito::UserPool
+    Properties:
+      UserPoolName: mood-journal-users
+      AutoVerifiedAttributes:
+        - email
+      UsernameAttributes:
+        - email
+      Policies:
+        PasswordPolicy:
+          MinimumLength: 8
+          RequireUppercase: false
+          RequireLowercase: false
+          RequireNumbers: false
+          RequireSymbols: false
+
+  UserPoolClient:
+    Type: AWS::Cognito::UserPoolClient
+    Properties:
+      ClientName: mood-journal-client
+      UserPoolId: !Ref UserPool
+      ExplicitAuthFlows:
+        - ALLOW_USER_SRP_AUTH
+        - ALLOW_REFRESH_TOKEN_AUTH
+      GenerateSecret: false
+
+  # --- Lambda ---
   LambdaRole:
     Type: AWS::IAM::Role
     Properties:
@@ -54,40 +106,75 @@ Resources:
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
       Policies:
-        - PolicyName: RekognitionAccess
+        - PolicyName: LambdaPolicy
           PolicyDocument:
             Version: '2012-10-17'
             Statement:
               - Effect: Allow
                 Action: rekognition:DetectFaces
                 Resource: '*'
+              - Effect: Allow
+                Action:
+                  - s3:PutObject
+                  - s3:GetObject
+                  - s3:ListBucket
+                Resource:
+                  - !GetAtt WebsiteBucket.Arn
+                  - !Sub '${WebsiteBucket.Arn}/*'
+              - Effect: Allow
+                Action:
+                  - dynamodb:PutItem
+                  - dynamodb:GetItem
+                  - dynamodb:UpdateItem
+                  - dynamodb:Query
+                Resource: !GetAtt MoodTable.Arn
 
   LambdaFunction:
     Type: AWS::Lambda::Function
     Properties:
-      FunctionName: face-expression-detector
+      FunctionName: mood-journal-handler
       Runtime: python3.12
       Handler: index.lambda_handler
       Role: !GetAtt LambdaRole.Arn
       Timeout: 30
+      Environment:
+        Variables:
+          WEBSITE_BUCKET: !Ref WebsiteBucket
+          DYNAMODB_TABLE: !Ref MoodTable
       Code:
         ZipFile: |
           def lambda_handler(event, context):
             return {'statusCode': 200, 'body': 'placeholder'}
 
+  # --- API Gateway ---
   HttpApi:
     Type: AWS::ApiGatewayV2::Api
     Properties:
-      Name: face-expression-api
+      Name: mood-journal-api
       ProtocolType: HTTP
       CorsConfiguration:
         AllowOrigins:
           - '*'
         AllowMethods:
           - POST
+          - GET
           - OPTIONS
         AllowHeaders:
           - Content-Type
+          - Authorization
+
+  JwtAuthorizer:
+    Type: AWS::ApiGatewayV2::Authorizer
+    Properties:
+      ApiId: !Ref HttpApi
+      AuthorizerType: JWT
+      Name: cognito-authorizer
+      IdentitySource:
+        - '$request.header.Authorization'
+      JwtConfiguration:
+        Audience:
+          - !Ref UserPoolClient
+        Issuer: !Sub 'https://cognito-idp.${AWS::Region}.amazonaws.com/${UserPool}'
 
   LambdaPermission:
     Type: AWS::Lambda::Permission
@@ -105,11 +192,40 @@ Resources:
       IntegrationUri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${LambdaFunction.Arn}/invocations'
       PayloadFormatVersion: '2.0'
 
-  ApiRoute:
+  RouteDetect:
     Type: AWS::ApiGatewayV2::Route
     Properties:
       ApiId: !Ref HttpApi
       RouteKey: 'POST /detect'
+      AuthorizationType: JWT
+      AuthorizerId: !Ref JwtAuthorizer
+      Target: !Sub 'integrations/${ApiIntegration}'
+
+  RouteEntries:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref HttpApi
+      RouteKey: 'GET /entries'
+      AuthorizationType: JWT
+      AuthorizerId: !Ref JwtAuthorizer
+      Target: !Sub 'integrations/${ApiIntegration}'
+
+  RouteResolve:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref HttpApi
+      RouteKey: 'POST /resolve'
+      AuthorizationType: JWT
+      AuthorizerId: !Ref JwtAuthorizer
+      Target: !Sub 'integrations/${ApiIntegration}'
+
+  RouteSuggest:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref HttpApi
+      RouteKey: 'GET /suggest'
+      AuthorizationType: JWT
+      AuthorizerId: !Ref JwtAuthorizer
       Target: !Sub 'integrations/${ApiIntegration}'
 
   ApiStage:
@@ -119,6 +235,32 @@ Resources:
       StageName: '$default'
       AutoDeploy: true
 
+  # --- CloudFront ---
+  CloudFrontDistribution:
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        Enabled: true
+        DefaultRootObject: index.html
+        Origins:
+          - Id: S3Origin
+            DomainName: !Sub '${WebsiteBucket}.s3-website-${AWS::Region}.amazonaws.com'
+            CustomOriginConfig:
+              HTTPPort: 80
+              HTTPSPort: 443
+              OriginProtocolPolicy: http-only
+        DefaultCacheBehavior:
+          TargetOriginId: S3Origin
+          ViewerProtocolPolicy: redirect-to-https
+          CachePolicyId: 658327ea-f89d-4fab-a63d-7e88639e58f6
+          AllowedMethods:
+            - GET
+            - HEAD
+          CachedMethods:
+            - GET
+            - HEAD
+
+  # --- CodeBuild ---
   CodeBuildRole:
     Type: AWS::IAM::Role
     Properties:
@@ -154,12 +296,12 @@ Resources:
               - Effect: Allow
                 Action:
                   - lambda:UpdateFunctionCode
-                Resource: !Sub 'arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:face-expression-detector'
+                Resource: !Sub 'arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:mood-journal-handler'
 
   CodeBuildProject:
     Type: AWS::CodeBuild::Project
     Properties:
-      Name: face-expression-build
+      Name: mood-journal-build
       ServiceRole: !GetAtt CodeBuildRole.Arn
       Artifacts:
         Type: CODEPIPELINE
@@ -171,13 +313,18 @@ Resources:
           - Name: WEBSITE_BUCKET
             Value: !Ref WebsiteBucket
           - Name: API_URL
-            Value: !Sub 'https://${HttpApi}.execute-api.${AWS::Region}.amazonaws.com/detect'
+            Value: !Sub 'https://${HttpApi}.execute-api.${AWS::Region}.amazonaws.com'
           - Name: LAMBDA_FUNCTION_NAME
             Value: !Ref LambdaFunction
+          - Name: COGNITO_USER_POOL_ID
+            Value: !Ref UserPool
+          - Name: COGNITO_CLIENT_ID
+            Value: !Ref UserPoolClient
       Source:
         Type: CODEPIPELINE
         BuildSpec: buildspec.yml
 
+  # --- CodePipeline ---
   CodePipelineRole:
     Type: AWS::IAM::Role
     Properties:
@@ -215,7 +362,7 @@ Resources:
   Pipeline:
     Type: AWS::CodePipeline::Pipeline
     Properties:
-      Name: face-expression-pipeline
+      Name: mood-journal-pipeline
       RoleArn: !GetAtt CodePipelineRole.Arn
       ArtifactStore:
         Type: S3
@@ -252,34 +399,17 @@ Resources:
                 - Name: SourceOutput
               OutputArtifacts:
                 - Name: BuildOutput
-          
-  CloudFrontDistribution:
-    Type: AWS::CloudFront::Distribution
-    Properties:
-      DistributionConfig:
-        Enabled: true
-        DefaultRootObject: index.html
-        Origins:
-          - Id: S3Origin
-            DomainName: !Sub '${WebsiteBucket}.s3-website-${AWS::Region}.amazonaws.com'
-            CustomOriginConfig:
-              HTTPPort: 80
-              HTTPSPort: 443
-              OriginProtocolPolicy: http-only
-        DefaultCacheBehavior:
-          TargetOriginId: S3Origin
-          ViewerProtocolPolicy: redirect-to-https
-          CachePolicyId: 658327ea-f89d-4fab-a63d-7e88639e58f6
-          AllowedMethods:
-            - GET
-            - HEAD
-          CachedMethods:
-            - GET
-            - HEAD
+
 Outputs:
   WebsiteURL:
     Value: !Sub 'https://${CloudFrontDistribution.DomainName}'
-    Description: Live website URL (HTTPS)
+    Description: Live website URL
   ApiURL:
-    Value: !Sub 'https://${HttpApi}.execute-api.${AWS::Region}.amazonaws.com/detect'
+    Value: !Sub 'https://${HttpApi}.execute-api.${AWS::Region}.amazonaws.com'
     Description: API Gateway endpoint
+  UserPoolId:
+    Value: !Ref UserPool
+    Description: Cognito User Pool ID
+  UserPoolClientId:
+    Value: !Ref UserPoolClient
+    Description: Cognito Client ID
