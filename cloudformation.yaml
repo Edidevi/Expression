@@ -143,7 +143,11 @@ Resources:
               - Effect: Allow
                 Action:
                   - bedrock:InvokeModel
-                Resource: 'arn:aws:bedrock:us-east-1:843875214129:inference-profile/us.anthropic.claude-haiku-4-5-20251001-v1:0'
+                Resource: 
+                  - 'arn:aws:bedrock:us-east-1:843875214129:inference-profile/us.anthropic.claude-haiku-4-5-20251001-v1:0'
+                  - 'arn:aws:bedrock:us-east-1::foundation-model/anthropic.claude-haiku-4-5-20251001-v1:0'
+                
+                         
 
   LambdaFunction:
     Type: AWS::Lambda::Function
@@ -212,7 +216,7 @@ Resources:
                       }
 
                       ai_response = bedrock.invoke_model(
-                          modelId="anthropic.claude-sonnet-4-6",
+                          modelId="anthropic.claude-haiku-4-5-20251001-v1:0",
                           body=json.dumps(native_request)
                       )
                       
