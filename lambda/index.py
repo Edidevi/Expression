@@ -54,7 +54,7 @@ Be conversational, kind and non-clinical.
 Do not start with "I" and do not mention that you are an AI."""
 
         response_body = bedrock.invoke_model(
-            modelId='anthropic.claude-3-haiku-20240307-v1:0',
+            modelId='anthropic.claude-haiku-4-5-20251001-v1:0',
             contentType='application/json',
             accept='application/json',
             body=json.dumps({
