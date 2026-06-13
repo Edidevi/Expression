@@ -5,20 +5,25 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Mood Journal</title>
   <script src="https://cdn.jsdelivr.net/npm/amazon-cognito-identity-js@6/dist/amazon-cognito-identity.min.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@500;700&family=Lora:ital,wght@0,400;0,500;0,600;1,400&display=swap" rel="stylesheet">
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
 
     body {
-      background: #0f0f0f;
-      color: #f0f0f0;
-      font-family: 'Segoe UI', sans-serif;
+      background: #f4f0e6;
+      background-image: repeating-linear-gradient(transparent, transparent 38px, #e3ddc9 39px);
+      color: #2b2622;
+      font-family: 'Lora', serif;
       min-height: 100vh;
+      line-height: 1.6;
     }
 
     .page { display: none; }
     .page.active { display: block; }
 
-    /* Auth pages */
+    /* ===== Auth pages ===== */
     .auth-container {
       display: flex;
       flex-direction: column;
@@ -29,23 +34,27 @@
     }
 
     .auth-box {
-      background: #1a1a1a;
-      border: 1px solid #2a2a2a;
-      border-radius: 16px;
-      padding: 2rem;
+      background: #fffdf8;
+      border: 1px solid #e0d8c5;
+      box-shadow: 4px 4px 0 #e3ddc9;
+      padding: 2.5rem;
       width: 100%;
       max-width: 400px;
     }
 
     .auth-box h1 {
-      font-size: 1.5rem;
-      margin-bottom: 0.5rem;
+      font-family: 'Caveat', cursive;
+      font-weight: 700;
+      font-size: 2.4rem;
+      margin-bottom: 0.25rem;
+      color: #2b2622;
     }
 
     .auth-box p {
-      color: #888;
+      color: #8a8073;
       font-size: 0.9rem;
       margin-bottom: 1.5rem;
+      font-style: italic;
     }
 
     input[type="email"],
@@ -54,13 +63,13 @@
     textarea {
       width: 100%;
       padding: 0.75rem 1rem;
-      background: #0f0f0f;
-      border: 1px solid #2a2a2a;
-      border-radius: 8px;
-      color: #f0f0f0;
+      background: #f4f0e6;
+      border: 1px solid #d8cfba;
+      border-radius: 2px;
+      color: #2b2622;
       font-size: 0.95rem;
       margin-bottom: 1rem;
-      font-family: 'Segoe UI', sans-serif;
+      font-family: 'Lora', serif;
     }
 
     textarea {
@@ -70,200 +79,364 @@
 
     input:focus, textarea:focus {
       outline: none;
-      border-color: #7c3aed;
+      border-color: #c97064;
     }
 
     .btn {
       width: 100%;
       padding: 0.8rem;
-      background: #7c3aed;
-      color: white;
+      background: #2b2622;
+      color: #f4f0e6;
       border: none;
-      border-radius: 8px;
-      font-size: 1rem;
+      border-radius: 2px;
+      font-family: 'Caveat', cursive;
+      font-weight: 700;
+      font-size: 1.25rem;
       cursor: pointer;
       transition: background 0.2s;
       margin-bottom: 0.75rem;
+      letter-spacing: 0.5px;
     }
 
-    .btn:hover { background: #6d28d9; }
-    .btn:disabled { background: #444; cursor: not-allowed; }
+    .btn:hover { background: #c97064; }
+    .btn:disabled { background: #b8ad9a; cursor: not-allowed; }
+
     .btn.secondary {
       background: transparent;
-      border: 1px solid #2a2a2a;
-      color: #888;
+      border: 1px solid #d8cfba;
+      color: #8a8073;
+      font-family: 'Lora', serif;
+      font-weight: 500;
+      font-size: 0.9rem;
     }
-    .btn.secondary:hover { background: #1a1a1a; color: #f0f0f0; }
+    .btn.secondary:hover { background: #f4f0e6; color: #2b2622; border-color: #2b2622; }
 
     .error-msg {
-      color: #f87171;
+      color: #b5614f;
       font-size: 0.85rem;
       margin-bottom: 1rem;
       display: none;
     }
 
-    /* Main app */
+    /* ===== Main app ===== */
     .app-container {
-      max-width: 700px;
+      max-width: 720px;
       margin: 0 auto;
-      padding: 2rem;
+      padding: 3rem 3rem 3rem 4.5rem;
+      position: relative;
+      min-height: 100vh;
+    }
+
+    /* red margin rule */
+    .app-container::before {
+      content: '';
+      position: absolute;
+      left: 3rem;
+      top: 0;
+      bottom: 0;
+      width: 1px;
+      background: #c97064;
+      opacity: 0.4;
     }
 
     .app-header {
       display: flex;
       justify-content: space-between;
-      align-items: center;
-      margin-bottom: 2rem;
+      align-items: flex-end;
+      margin-bottom: 2.5rem;
+      border-bottom: 1px solid #2b2622;
+      padding-bottom: 1rem;
     }
 
-    .app-header h1 { font-size: 1.5rem; }
+    .app-header h1 {
+      font-family: 'Caveat', cursive;
+      font-weight: 700;
+      font-size: 2.6rem;
+      color: #2b2622;
+    }
+
+    .app-header .date-today {
+      font-size: 0.85rem;
+      color: #8a8073;
+      font-style: italic;
+      text-align: right;
+    }
 
     .logout-btn {
-      background: transparent;
-      border: 1px solid #2a2a2a;
-      color: #888;
-      padding: 0.4rem 1rem;
-      border-radius: 8px;
+      background: none;
+      border: 1px solid #b8ad9a;
+      color: #6b6155;
+      padding: 0.35rem 0.9rem;
+      border-radius: 2px;
+      font-family: 'Lora', serif;
+      font-size: 0.8rem;
       cursor: pointer;
-      font-size: 0.85rem;
+      margin-top: 0.5rem;
+    }
+    .logout-btn:hover { color: #2b2622; border-color: #2b2622; }
+
+    /* ===== Snap card ===== */
+    .snap-card {
+      background: #fffdf8;
+      border: 1px solid #e0d8c5;
+      box-shadow: 3px 3px 0 #e3ddc9;
+      padding: 1.5rem;
+      margin-bottom: 2.5rem;
+      text-align: center;
     }
 
-    .logout-btn:hover { color: #f0f0f0; border-color: #444; }
-
-    /* Snap section */
-    .snap-section {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      margin-bottom: 3rem;
-    }
-
-    video, canvas {
-      border-radius: 12px;
+    video, canvas, #snapshot {
       width: 100%;
-      max-width: 400px;
-      background: #1a1a1a;
+      max-width: 380px;
+      border-radius: 2px;
+      margin-bottom: 1rem;
+      background: #e3ddc9;
+      filter: sepia(8%);
     }
 
     canvas { display: none; }
+    #snapshot { display: none; }
 
-    #snapshot {
-      border-radius: 12px;
-      width: 100%;
-      max-width: 400px;
+    .snap-btn {
+      font-family: 'Caveat', cursive;
+      font-weight: 700;
+      font-size: 1.4rem;
+      background: #2b2622;
+      color: #f4f0e6;
+      border: none;
+      padding: 0.6rem 2rem;
+      border-radius: 2px;
+      cursor: pointer;
+      letter-spacing: 0.5px;
+    }
+    .snap-btn:hover { background: #c97064; }
+    .snap-btn:disabled { background: #b8ad9a; cursor: not-allowed; }
+
+    /* confirm row */
+    .confirm-row {
+      margin-top: 1.25rem;
+      padding-top: 1.25rem;
+      border-top: 1px dashed #d8cfba;
       display: none;
-      margin-bottom: 1rem;
     }
 
-    .emotion-result {
-      text-align: center;
-      margin: 1rem 0;
+    .confirm-row .reading {
+      font-size: 0.85rem;
+      color: #8a8073;
+      text-transform: uppercase;
+      letter-spacing: 2px;
+      margin-bottom: 0.4rem;
     }
 
-    .emotion-result .emoji { font-size: 3rem; }
-    .emotion-result .label { font-size: 1.8rem; font-weight: 700; }
-    .emotion-result .conf { color: #888; font-size: 0.9rem; }
+    .confirm-row .emotion {
+      font-family: 'Caveat', cursive;
+      font-weight: 700;
+      font-size: 2.2rem;
+      color: #2b2622;
+    }
 
-    .reason-box {
-      width: 100%;
-      max-width: 400px;
+    .confirm-row .conf {
+      font-size: 0.85rem;
+      color: #a39a8b;
+      margin-top: 0.2rem;
+    }
+
+    .confirm-actions {
+      margin-top: 0.9rem;
+      display: flex;
+      gap: 0.75rem;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+
+    .pill-btn {
+      font-family: 'Lora', serif;
+      font-size: 0.85rem;
+      padding: 0.4rem 1.2rem;
+      border-radius: 20px;
+      border: 1px solid #2b2622;
+      background: transparent;
+      color: #2b2622;
+      cursor: pointer;
+    }
+    .pill-btn.yes:hover { background: #2b2622; color: #f4f0e6; }
+    .pill-btn.no:hover { background: #c97064; border-color: #c97064; color: #fff; }
+
+    /* correction picker */
+    .correction-box {
       margin-top: 1rem;
+      padding-top: 1rem;
+      border-top: 1px dashed #d8cfba;
+      display: none;
+    }
+
+    .correction-box .reading {
+      font-size: 0.85rem;
+      color: #8a8073;
+      text-transform: uppercase;
+      letter-spacing: 2px;
+      margin-bottom: 0.6rem;
+    }
+
+    .emotion-picks {
+      display: flex;
+      gap: 0.5rem;
+      justify-content: center;
+      flex-wrap: wrap;
+      margin-bottom: 0.75rem;
+    }
+
+    .emotion-pick {
+      font-family: 'Lora', serif;
+      font-size: 0.85rem;
+      padding: 0.4rem 0.9rem;
+      border-radius: 20px;
+      border: 1px solid #d8cfba;
+      background: #f4f0e6;
+      color: #2b2622;
+      cursor: pointer;
+    }
+    .emotion-pick:hover, .emotion-pick.selected {
+      background: #2b2622;
+      color: #f4f0e6;
+      border-color: #2b2622;
+    }
+
+    /* reason box */
+    .reason-box {
+      margin-top: 1.25rem;
+      padding-top: 1.25rem;
+      border-top: 1px dashed #d8cfba;
+      display: none;
+      text-align: left;
     }
 
     .reason-box label {
       display: block;
-      color: #888;
+      color: #8a8073;
       font-size: 0.85rem;
+      font-style: italic;
       margin-bottom: 0.5rem;
     }
 
+    /* suggestion box */
     .suggestion-box {
-      width: 100%;
-      max-width: 400px;
-      background: #1a2a1a;
-      border: 1px solid #2a3a2a;
-      border-radius: 10px;
-      padding: 1rem;
-      margin-top: 1rem;
-      font-size: 0.9rem;
-      color: #4ade80;
+      margin-top: 1.25rem;
+      padding-top: 1.25rem;
+      border-top: 1px dashed #d8cfba;
+      text-align: left;
+      font-size: 0.92rem;
+      color: #5c6f4d;
       display: none;
     }
 
-    /* Timeline */
-    .timeline-section h2 {
-      font-size: 1.2rem;
-      margin-bottom: 1.5rem;
-      color: #888;
+    .suggestion-box .label {
+      font-family: 'Caveat', cursive;
+      font-weight: 700;
+      font-size: 1.3rem;
+      color: #6b7a5e;
+      margin-bottom: 0.4rem;
+      display: block;
     }
 
-    .entry-card {
-      background: #1a1a1a;
-      border: 1px solid #2a2a2a;
-      border-radius: 12px;
-      padding: 1rem 1.25rem;
-      margin-bottom: 1rem;
+    .suggestion-box .personal {
+      margin-top: 0.75rem;
+      padding-top: 0.75rem;
+      border-top: 1px dotted #d8e0cd;
+      color: #8a8073;
+      font-style: italic;
+    }
+
+    /* ===== Timeline ===== */
+    .timeline-section h2 {
+      font-family: 'Caveat', cursive;
+      font-size: 2rem;
+      margin-bottom: 1.5rem;
+      color: #2b2622;
+    }
+
+    .entry {
+      margin-bottom: 2.25rem;
+      padding-left: 1.25rem;
+      border-left: 2px solid #e0d8c5;
+      position: relative;
+    }
+
+    .entry::before {
+      content: '';
+      position: absolute;
+      left: -5px;
+      top: 0.4rem;
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #c97064;
     }
 
     .entry-header {
       display: flex;
-      align-items: center;
-      gap: 10px;
-      margin-bottom: 0.5rem;
+      align-items: baseline;
+      gap: 0.75rem;
+      margin-bottom: 0.3rem;
     }
 
-    .entry-emoji { font-size: 1.5rem; }
+    .entry-emoji { font-size: 1.3rem; }
 
     .entry-emotion {
-      font-weight: 600;
-      font-size: 0.95rem;
+      font-family: 'Caveat', cursive;
+      font-weight: 700;
+      font-size: 1.5rem;
     }
 
     .entry-time {
-      color: #555;
-      font-size: 0.8rem;
+      font-size: 0.78rem;
+      color: #a39a8b;
+      font-style: italic;
       margin-left: auto;
     }
 
     .entry-reason {
-      color: #aaa;
-      font-size: 0.88rem;
-      margin-bottom: 0.75rem;
+      font-style: italic;
+      color: #5c544a;
+      margin-bottom: 0.5rem;
+      font-size: 0.95rem;
     }
 
     .entry-resolution {
-      background: #1a2a1a;
-      border-radius: 8px;
-      padding: 0.6rem 0.8rem;
-      font-size: 0.85rem;
-      color: #4ade80;
-      margin-bottom: 0.75rem;
+      font-size: 0.88rem;
+      color: #6b7a5e;
+      background: #f0f3e9;
+      border-left: 2px solid #97a983;
+      padding: 0.4rem 0.7rem;
+      margin-bottom: 0.5rem;
     }
 
-    .resolve-form { margin-top: 0.75rem; }
+    .resolve-form { margin-top: 0.5rem; }
 
     .resolve-form label {
       font-size: 0.82rem;
-      color: #666;
+      color: #8a8073;
+      font-style: italic;
       display: block;
       margin-bottom: 0.4rem;
     }
 
     .resolve-btn {
-      padding: 0.5rem 1rem;
-      background: #7c3aed;
-      color: white;
+      font-family: 'Lora', serif;
+      padding: 0.4rem 1rem;
+      background: #2b2622;
+      color: #f4f0e6;
       border: none;
-      border-radius: 6px;
+      border-radius: 2px;
       cursor: pointer;
       font-size: 0.85rem;
     }
-
-    .resolve-btn:hover { background: #6d28d9; }
+    .resolve-btn:hover { background: #c97064; }
 
     .empty-state {
       text-align: center;
-      color: #555;
+      color: #a39a8b;
+      font-style: italic;
       padding: 3rem 0;
       font-size: 0.95rem;
     }
@@ -275,7 +448,7 @@
   <div id="page-login" class="page active">
     <div class="auth-container">
       <div class="auth-box">
-        <h1>👋 Welcome back</h1>
+        <h1>Welcome back</h1>
         <p>Sign in to your mood journal</p>
         <div id="login-error" class="error-msg"></div>
         <input type="email" id="login-email" placeholder="Email" />
@@ -290,7 +463,7 @@
   <div id="page-signup" class="page">
     <div class="auth-container">
       <div class="auth-box">
-        <h1>✨ Create account</h1>
+        <h1>New page</h1>
         <p>Start tracking your mood journey</p>
         <div id="signup-error" class="error-msg"></div>
         <input type="email" id="signup-email" placeholder="Email" />
@@ -305,7 +478,7 @@
   <div id="page-verify" class="page">
     <div class="auth-container">
       <div class="auth-box">
-        <h1>📧 Check your email</h1>
+        <h1>Check your email</h1>
         <p>Enter the verification code we sent you</p>
         <div id="verify-error" class="error-msg"></div>
         <input type="text" id="verify-code" placeholder="Verification code" />
@@ -319,39 +492,56 @@
     <div class="app-container">
 
       <div class="app-header">
-        <h1>🧠 Mood Journal</h1>
-        <button class="logout-btn" onclick="logout()">Sign out</button>
+        <h1>Mood Journal</h1>
+        <div>
+          <div class="date-today" id="today-date"></div>
+          <button class="logout-btn" onclick="logout()">Sign out</button>
+        </div>
       </div>
 
       <!-- Snap Section -->
-      <div class="snap-section">
+      <div class="snap-card">
         <video id="video" autoplay playsinline></video>
         <canvas id="canvas"></canvas>
         <img id="snapshot" alt="Your photo" />
 
-        <button class="btn" id="snapBtn" onclick="snap()" style="max-width:400px; margin-top:1rem;">
-          📸 How am I feeling?
+        <button class="snap-btn" id="snapBtn" onclick="snap()">
+          How am I feeling?
         </button>
 
-        <div id="emotion-result" class="emotion-result" style="display:none;">
-          <div class="emoji" id="emoji"></div>
-          <div class="label" id="emotion-label"></div>
-          <div class="conf" id="confidence"></div>
+        <!-- Detected emotion + confirm/decline -->
+        <div id="confirm-row" class="confirm-row">
+          <div class="reading">We think you look</div>
+          <div class="emotion" id="detected-emotion"></div>
+          <div class="conf" id="detected-confidence"></div>
+          <div class="confirm-actions">
+            <button class="pill-btn yes" onclick="confirmEmotion(true)">Yes, that's right</button>
+            <button class="pill-btn no" onclick="confirmEmotion(false)">Not quite</button>
+          </div>
         </div>
 
-        <div id="suggestion-box" class="suggestion-box"></div>
+        <!-- Correction picker (shown if declined) -->
+        <div id="correction-box" class="correction-box">
+          <div class="reading">How are you really feeling?</div>
+          <div class="emotion-picks" id="emotion-picks"></div>
+          <input type="text" id="custom-emotion" placeholder="Or type your own..." />
+        </div>
 
-        <div id="reason-box" class="reason-box" style="display:none;">
+        <!-- Reason input -->
+        <div id="reason-box" class="reason-box">
           <label>What's making you feel this way?</label>
           <textarea id="reason-input" placeholder="Write about how you're feeling..."></textarea>
-          <button class="btn" onclick="submitSnap()" style="max-width:400px;">Get advice & save</button>
+          <button class="btn" onclick="submitSnap()">Get advice & save</button>
         </div>
+
+        <!-- Advice -->
+        <div id="suggestion-box" class="suggestion-box"></div>
       </div>
 
       <!-- Timeline -->
       <div class="timeline-section">
-        <h2>Your mood history</h2>
-        <div id="entries-list"><div class="empty-state">No entries yet — snap your first mood above!</div></div>
+        <h2>Recent entries</h2>
+        <div id="entries-list"><div class="empty-state">No entries yet — snap your first mood above</div></div>
       </div>
 
     </div>
@@ -367,10 +557,16 @@
       DISGUSTED: '🤢', CONFUSED: '😕', CALM: '😌', FEAR: '😨'
     };
 
+    const emotionOptions = ['HAPPY', 'SAD', 'ANGRY', 'SURPRISED', 'DISGUSTED', 'CONFUSED', 'CALM', 'FEAR'];
+
     let currentToken = null;
     let currentEntryId = null;
     let cognitoUser = null;
     let pendingEmail = null;
+
+    // Holds the working state of the current snap until it's confirmed/saved
+    let pendingDetection = null; // { emotion, confidence, base64 }
+    let confirmedEmotion = null;
 
     const poolData = { UserPoolId: USER_POOL_ID, ClientId: CLIENT_ID };
     const userPool = new AmazonCognitoIdentity.CognitoUserPool(poolData);
@@ -386,7 +582,13 @@
       el.style.display = 'block';
     }
 
-    // Auth
+    function setTodayDate() {
+      const now = new Date();
+      const options = { weekday: 'long', day: 'numeric', month: 'long' };
+      document.getElementById('today-date').textContent = now.toLocaleDateString('en-GB', options);
+    }
+
+    // ===== Auth =====
     function signup() {
       const email = document.getElementById('signup-email').value;
       const password = document.getElementById('signup-password').value;
@@ -429,11 +631,20 @@
 
     function startApp() {
       showPage('page-app');
+      setTodayDate();
       startCamera();
       loadEntries();
+      buildEmotionPicks();
     }
 
-    // Camera
+    function buildEmotionPicks() {
+      const wrap = document.getElementById('emotion-picks');
+      wrap.innerHTML = emotionOptions.map(em =>
+        `<button class="emotion-pick" data-emotion="${em}" onclick="selectCorrection('${em}')">${emojiMap[em]} ${em}</button>`
+      ).join('');
+    }
+
+    // ===== Camera =====
     const video = document.getElementById('video');
     const canvas = document.getElementById('canvas');
 
@@ -441,97 +652,160 @@
       navigator.mediaDevices.getUserMedia({ video: true })
         .then(stream => { video.srcObject = stream; })
         .catch(() => {
-          document.getElementById('snapBtn').textContent = '❌ Camera access denied';
+          document.getElementById('snapBtn').textContent = 'Camera access denied';
           document.getElementById('snapBtn').disabled = true;
         });
+    }
+
+    function resetSnapUI() {
+      document.getElementById('confirm-row').style.display = 'none';
+      document.getElementById('correction-box').style.display = 'none';
+      document.getElementById('reason-box').style.display = 'none';
+      document.getElementById('suggestion-box').style.display = 'none';
+      document.getElementById('suggestion-box').innerHTML = '';
+      document.getElementById('custom-emotion').value = '';
+      document.getElementById('reason-input').value = '';
+      document.querySelectorAll('.emotion-pick').forEach(b => b.classList.remove('selected'));
+      confirmedEmotion = null;
     }
 
     async function snap() {
       const btn = document.getElementById('snapBtn');
       btn.disabled = true;
-      btn.textContent = 'Analysing...';
+      btn.textContent = 'Looking...';
+
+      resetSnapUI();
 
       canvas.width = video.videoWidth;
       canvas.height = video.videoHeight;
       canvas.getContext('2d').drawImage(video, 0, 0);
 
       const snapshot = document.getElementById('snapshot');
-      snapshot.src = canvas.toDataURL('image/jpeg');
+      const dataUrl = canvas.toDataURL('image/jpeg');
+      snapshot.src = dataUrl;
       snapshot.style.display = 'block';
       video.style.display = 'none';
 
-      const base64 = canvas.toDataURL('image/jpeg').split(',')[1];
-      window._pendingImage = base64;
-
-      document.getElementById('emotion-result').style.display = 'none';
-      document.getElementById('suggestion-box').style.display = 'none';
-      document.getElementById('reason-box').style.display = 'block';
-      document.getElementById('snapBtn').textContent = '📸 Snap again';
-      document.getElementById('snapBtn').disabled = false;
-      document.getElementById('reason-input').value = '';
-      loadEntries();
-    }
-
-    async function submitSnap() {
-      const btn = document.getElementById('snapBtn');
-      const reason = document.getElementById('reason-input').value;
-      const base64 = window._pendingImage;
+      const base64 = dataUrl.split(',')[1];
 
       try {
         const res = await fetch(`${API_URL}/detect`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'Authorization': currentToken },
-          body: JSON.stringify({ image: base64, reason: reason })
+          body: JSON.stringify({ image: base64 })
         });
 
         const data = await res.json();
-        const emotion = data.emotion || 'UNKNOWN';
-        const confidence = data.confidence || 0;
+
+        if (!data.emotion || data.emotion === 'No face detected') {
+          document.getElementById('detected-emotion').textContent = 'No face detected';
+          document.getElementById('detected-confidence').textContent = 'Try again with better lighting';
+          document.getElementById('confirm-row').style.display = 'block';
+          document.querySelector('.confirm-actions').style.display = 'none';
+        } else {
+          pendingDetection = { emotion: data.emotion, confidence: data.confidence, base64 };
+          document.getElementById('detected-emotion').textContent = data.emotion.charAt(0) + data.emotion.slice(1).toLowerCase();
+          document.getElementById('detected-confidence').textContent = `${data.confidence}% confidence`;
+          document.querySelector('.confirm-actions').style.display = 'flex';
+          document.getElementById('confirm-row').style.display = 'block';
+        }
+      } catch (err) {
+        document.getElementById('detected-emotion').textContent = 'Something went wrong';
+        document.getElementById('confirm-row').style.display = 'block';
+        document.querySelector('.confirm-actions').style.display = 'none';
+      }
+
+      btn.textContent = 'Snap again';
+      btn.disabled = false;
+    }
+
+    function confirmEmotion(accepted) {
+      if (accepted) {
+        confirmedEmotion = pendingDetection.emotion;
+        document.getElementById('correction-box').style.display = 'none';
+        document.getElementById('reason-box').style.display = 'block';
+      } else {
+        document.getElementById('correction-box').style.display = 'block';
+        document.getElementById('reason-box').style.display = 'none';
+      }
+    }
+
+    function selectCorrection(emotion) {
+      confirmedEmotion = emotion;
+      document.getElementById('custom-emotion').value = '';
+      document.querySelectorAll('.emotion-pick').forEach(b => {
+        b.classList.toggle('selected', b.dataset.emotion === emotion);
+      });
+      document.getElementById('reason-box').style.display = 'block';
+    }
+
+    // Allow typing a custom emotion
+    document.addEventListener('DOMContentLoaded', () => {
+      const customInput = document.getElementById('custom-emotion');
+      if (customInput) {
+        customInput.addEventListener('input', () => {
+          const val = customInput.value.trim();
+          if (val) {
+            confirmedEmotion = val.toUpperCase();
+            document.querySelectorAll('.emotion-pick').forEach(b => b.classList.remove('selected'));
+            document.getElementById('reason-box').style.display = 'block';
+          }
+        });
+      }
+    });
+
+    async function submitSnap() {
+      const reason = document.getElementById('reason-input').value;
+      const emotionToUse = confirmedEmotion || (pendingDetection && pendingDetection.emotion);
+      const confidence = pendingDetection ? pendingDetection.confidence : null;
+      const base64 = pendingDetection ? pendingDetection.base64 : null;
+      const wasCorrected = pendingDetection && emotionToUse !== pendingDetection.emotion;
+
+      const saveBtn = document.querySelector('#reason-box .btn');
+      saveBtn.disabled = true;
+      saveBtn.textContent = 'Thinking...';
+
+      try {
+        const res = await fetch(`${API_URL}/detect`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': currentToken },
+          body: JSON.stringify({
+            image: base64,
+            reason: reason,
+            emotion: emotionToUse,
+            confidence: confidence,
+            corrected: wasCorrected
+          })
+        });
+
+        const data = await res.json();
         currentEntryId = data.entryId;
 
-        document.getElementById('emoji').textContent = emojiMap[emotion] || '🤔';
-        document.getElementById('emotion-label').textContent = emotion;
-        document.getElementById('confidence').textContent = `${confidence}% confidence`;
-        document.getElementById('emotion-result').style.display = 'block';
-        document.getElementById('reason-box').style.display = 'block';
+        const box = document.getElementById('suggestion-box');
+        box.innerHTML = '';
 
-            if (data.advice) {
-          const box = document.getElementById('suggestion-box');
-          box.innerHTML = '🧠 <strong>Advice for you:</strong><br><br>' + data.advice;
+        if (data.advice) {
+          box.innerHTML += `<span class="label">A note for you</span>${data.advice}`;
           box.style.display = 'block';
         }
 
         if (data.personalSuggestion) {
-          const box = document.getElementById('suggestion-box');
-          box.innerHTML += '<br><br>💜 <strong>From your history:</strong><br>' + data.personalSuggestion;
+          box.innerHTML += `<div class="personal">${data.personalSuggestion}</div>`;
           box.style.display = 'block';
         }
 
+        loadEntries();
+
       } catch (err) {
-        document.getElementById('emotion-label').textContent = 'Something went wrong';
-        document.getElementById('emotion-result').style.display = 'block';
+        document.getElementById('suggestion-box').innerHTML = 'Something went wrong saving this entry.';
+        document.getElementById('suggestion-box').style.display = 'block';
       }
 
-      btn.textContent = '📸 Snap again';
-      btn.disabled = false;
+      saveBtn.disabled = false;
+      saveBtn.textContent = 'Get advice & save';
     }
 
-    async function saveReason() {
-      const reason = document.getElementById('reason-input').value;
-      if (!reason.trim()) return;
-
-      await fetch(`${API_URL}/resolve`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': currentToken },
-        body: JSON.stringify({ entryId: currentEntryId, resolution: '', reason: reason })
-      });
-
-      document.getElementById('reason-box').style.display = 'none';
-      document.getElementById('reason-input').value = '';
-      loadEntries();
-    }
-
-    // Entries
+    // ===== Entries =====
     async function loadEntries() {
       try {
         const res = await fetch(`${API_URL}/entries`, {
@@ -547,26 +821,26 @@
     function renderEntries(entries) {
       const list = document.getElementById('entries-list');
       if (!entries.length) {
-        list.innerHTML = '<div class="empty-state">No entries yet — snap your first mood above!</div>';
+        list.innerHTML = '<div class="empty-state">No entries yet — snap your first mood above</div>';
         return;
       }
 
       list.innerHTML = entries.map(e => {
-        const date = new Date(e.timestamp).toLocaleString();
+        const date = new Date(e.timestamp).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
         const emoji = emojiMap[e.emotion] || '🤔';
         const resolution = e.resolved
-          ? `<div class="entry-resolution">✅ What helped: ${e.resolution}</div>`
+          ? `<div class="entry-resolution">What helped: ${e.resolution}</div>`
           : `<div class="resolve-form">
                <label>Feeling better? What helped?</label>
-               <textarea id="res-${e.entryId}" placeholder="What improved/ maintained your mood?"></textarea>
-               <button class="resolve-btn" onclick="submitResolution('${e.entryId}')">Save resolution</button>
+               <textarea id="res-${e.entryId}" placeholder="What improved your mood?"></textarea>
+               <button class="resolve-btn" onclick="submitResolution('${e.entryId}')">Save</button>
              </div>`;
 
         return `
-          <div class="entry-card">
+          <div class="entry">
             <div class="entry-header">
               <span class="entry-emoji">${emoji}</span>
-              <span class="entry-emotion">${e.emotion}</span>
+              <span class="entry-emotion">${e.emotion.charAt(0) + e.emotion.slice(1).toLowerCase()}</span>
               <span class="entry-time">${date}</span>
             </div>
             ${e.reason ? `<div class="entry-reason">"${e.reason}"</div>` : ''}
