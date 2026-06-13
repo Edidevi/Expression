@@ -76,8 +76,45 @@ Do not start with "I" and do not mention that you are an AI."""
 def detect_emotion(event, user_id):
     try:
         body = json.loads(event['body'])
+        reason = body.get('reason')
+
+        # Phase 2: confirmed/corrected emotion, generate advice and save
+        if reason is not None:
+            emotion = body.get('emotion', 'UNKNOWN')
+            confidence = body.get('confidence', 0)
+
+            table = dynamodb.Table(TABLE)
+            previous = get_previous_resolutions(user_id, emotion, table)
+            advice = get_advice(emotion, reason, previous)
+
+            personal_suggestion = None
+            if previous:
+                personal_suggestion = f"Last time you felt {emotion}, what helped you was: {previous[-1]}"
+
+            entry_id = str(uuid.uuid4())
+            timestamp = datetime.utcnow().isoformat()
+            table.put_item(Item={
+                'userId': user_id,
+                'entryId': entry_id,
+                'timestamp': timestamp,
+                'emotion': emotion,
+                'confidence': str(confidence),
+                'reason': reason,
+                'photoKey': '',
+                'resolved': False,
+                'resolution': ''
+            })
+
+            return response(200, {
+                'emotion': emotion,
+                'confidence': confidence,
+                'entryId': entry_id,
+                'advice': advice,
+                'personalSuggestion': personal_suggestion
+            })
+
+        # Phase 1: detect only, don't save
         image_data = base64.b64decode(body['image'])
-        reason = body.get('reason', '')
 
         result = rekognition.detect_faces(
             Image={'Bytes': image_data},
@@ -93,48 +130,9 @@ def detect_emotion(event, user_id):
         emotion = top_emotion['Type']
         confidence = round(top_emotion['Confidence'], 1)
 
-        # Save photo to S3
-        photo_key = f'photos/{user_id}/{uuid.uuid4()}.jpg'
-        s3.put_object(
-            Bucket=BUCKET,
-            Key=photo_key,
-            Body=image_data,
-            ContentType='image/jpeg'
-        )
-
-        # Get previous resolutions for this emotion
-        table = dynamodb.Table(TABLE)
-        previous = get_previous_resolutions(user_id, emotion, table)
-
-        # Get AI advice
-        advice = get_advice(emotion, reason, previous)
-
-        # Get personal suggestion from history
-        personal_suggestion = None
-        if previous:
-            personal_suggestion = f"Last time you felt {emotion}, what helped you was: {previous[-1]}"
-
-        # Save entry to DynamoDB
-        entry_id = str(uuid.uuid4())
-        timestamp = datetime.utcnow().isoformat()
-        table.put_item(Item={
-            'userId': user_id,
-            'entryId': entry_id,
-            'timestamp': timestamp,
-            'emotion': emotion,
-            'confidence': str(confidence),
-            'reason': reason,
-            'photoKey': photo_key,
-            'resolved': False,
-            'resolution': ''
-        })
-
         return response(200, {
             'emotion': emotion,
-            'confidence': confidence,
-            'entryId': entry_id,
-            'advice': advice,
-            'personalSuggestion': personal_suggestion
+            'confidence': confidence
         })
 
     except Exception as e:
