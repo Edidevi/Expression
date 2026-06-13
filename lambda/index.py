@@ -27,6 +27,8 @@ def lambda_handler(event, context):
         return get_entries(user_id)
     elif method == 'POST' and path == '/resolve':
         return resolve_entry(event, user_id)
+    elif method == 'GET' and path == '/summary':
+        return get_summary(user_id)
     else:
         return response(404, {'error': 'Not found'})
 
@@ -37,6 +39,50 @@ def get_user_id(event):
     except:
         return None
 
+def get_summary(user_id):
+    try:
+        table = dynamodb.Table(TABLE)
+        result = table.query(
+            KeyConditionExpression=boto3.dynamodb.conditions.Key('userId').eq(user_id)
+        )
+        items = sorted(result['Items'], key=lambda x: x['timestamp'], reverse=True)[:15]
+
+        if len(items) < 15:
+            return response(200, {'available': False})
+
+        emotions = [i['emotion'] for i in items]
+        most_common = max(set(emotions), key=emotions.count)
+
+        prompt = f"""You are a compassionate mental health support assistant.
+Someone's last 15 mood journal entries show their most common feeling has been {most_common}.
+
+Write 2-3 sentences acknowledging this pattern with warmth, then suggest 2-3 practical things they could try to improve their mood.
+Be conversational and kind. Do not start with "I" and do not mention you are an AI."""
+
+        response_body = bedrock.invoke_model(
+            modelId='us.anthropic.claude-haiku-4-5-20251001-v1:0',
+            contentType='application/json',
+            accept='application/json',
+            body=json.dumps({
+                'anthropic_version': 'bedrock-2023-05-31',
+                'max_tokens': 300,
+                'messages': [
+                    {'role': 'user', 'content': prompt}
+                ]
+            })
+        )
+
+        result_text = json.loads(response_body['body'].read())['content'][0]['text']
+
+        return response(200, {
+            'available': True,
+            'mostCommon': most_common,
+            'suggestions': result_text
+        })
+
+    except Exception as e:
+        print(f"Summary error: {str(e)}")
+        return response(500, {'error': str(e)})
 def get_advice(emotion, reason, previous_resolutions):
     try:
         previous_text = ''
