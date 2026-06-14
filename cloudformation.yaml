@@ -342,6 +342,7 @@ Resources:
     AuthorizationType: JWT
     AuthorizerId: !Ref JwtAuthorizer
     Target: !Sub 'integrations/${ApiIntegration}'
+    
   ApiStage:
     Type: AWS::ApiGatewayV2::Stage
     Properties:
