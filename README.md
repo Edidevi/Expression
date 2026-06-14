@@ -1,17 +1,19 @@
-# 🧠 Expression — Face Expression Lab & Mental Mood Journal
+# 🧠 Expression V1
 
-> A serverless, AI-powered mental well-being application that combines facial expression detection with personalised journaling to deliver compassionate, real-time mental health guidance.
+> A serverless, AI-powered mental well-being application that combines facial expression detection with personalised journaling to deliver compassionate, real-time mental health guidance. **NOT DESIGNED TO REPLACE THERAPY OR COUNSELLING, TO BE SEEN AS SELF STUDY**
 
-**Live Demo:** [https://d381ybey4gt21f.cloudfront.net](https://d381ybey4gt21f.cloudfront.net)
-**Repository:** [https://github.com/Edidevi/Expression](https://github.com/Edidevi/Expression)
+**Live Demo:** [https://dc2b8er08430l.cloudfront.net/)
+**Repository:** [https://github.com/Edidevi/Expression](
 
 ---
 
 ## 📖 Overview
+<img width="305" height="303" alt="image" src="https://github.com/user-attachments/assets/73985d78-a945-4e96-aa47-242caf53e07f" />
 
-Expression is a mental health journaling app built on AWS that meets users wherever they are — whether they check in daily or only reach out when they need help most. Users can log how they're feeling through written input and detected facial expressions. The app then uses AI to deliver personalised, empathetic well-being advice grounded in their actual emotional state.
+Expression is a mental health journaling app built on AWS that meets users wherever they are — whether they check in daily or only reach out when they an outlet for extreme emotions. Users can log how they're feeling through written input and detected facial expressions. The app then uses AI to deliver personalised, empathetic well-being advice grounded in their actual emotional state.
 
 The core insight behind the project: not everyone can fully label their own emotions. Emotional intelligence can be taught and learned — and this app helps bridge that gap through gentle, AI-guided reflection.
+
 
 ---
 
@@ -156,7 +158,3 @@ The fully serverless architecture (Lambda + API Gateway + DynamoDB + CloudFront)
 - **CI/CD:** AWS CodePipeline + CodeBuild
 
 ---
-
-## 📄 License
-
-This project is open source. See the repository for details.
