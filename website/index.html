@@ -120,7 +120,7 @@
 
     /* ===== Main app ===== */
     .app-container {
-      max-width: 720px;
+      max-width: 1100px;
       margin: 0 auto;
       padding: 3rem 3rem 3rem 4.5rem;
       position: relative;
@@ -137,6 +137,79 @@
       width: 1px;
       background: #c97064;
       opacity: 0.4;
+    }
+
+    .app-layout {
+      display: grid;
+      grid-template-columns: 280px 1fr;
+      gap: 3rem;
+    }
+
+    @media (max-width: 860px) {
+      .app-layout {
+        grid-template-columns: 1fr;
+      }
+      .summary-sidebar {
+        order: 2;
+      }
+      .main-column {
+        order: 1;
+      }
+    }
+
+    /* ===== Summary sidebar ===== */
+    .summary-sidebar {
+      display: none;
+    }
+
+    .summary-sidebar.visible {
+      display: block;
+    }
+
+    .summary-card {
+      background: #fffdf8;
+      border: 1px solid #e0d8c5;
+      box-shadow: 3px 3px 0 #e3ddc9;
+      padding: 1.5rem;
+      position: sticky;
+      top: 2rem;
+    }
+
+    .summary-card .summary-label {
+      font-size: 0.78rem;
+      color: #a39a8b;
+      text-transform: uppercase;
+      letter-spacing: 2px;
+      margin-bottom: 0.6rem;
+    }
+
+    .summary-card .summary-headline {
+      font-family: 'Caveat', cursive;
+      font-weight: 700;
+      font-size: 1.7rem;
+      color: #2b2622;
+      margin-bottom: 1rem;
+      line-height: 1.3;
+    }
+
+    .summary-card .summary-headline .emotion-word {
+      color: #c97064;
+    }
+
+    .summary-card .summary-body {
+      font-size: 0.92rem;
+      color: #5c544a;
+      border-top: 1px dashed #d8cfba;
+      padding-top: 1rem;
+    }
+
+    .summary-card .summary-body .summary-title {
+      font-family: 'Caveat', cursive;
+      font-weight: 700;
+      font-size: 1.2rem;
+      color: #6b7a5e;
+      display: block;
+      margin-bottom: 0.5rem;
     }
 
     .app-header {
@@ -499,6 +572,20 @@
         </div>
       </div>
 
+      <div class="app-layout">
+
+        <!-- Summary sidebar -->
+        <div class="summary-sidebar" id="summary-sidebar">
+          <div class="summary-card">
+            <div class="summary-label">Looking back</div>
+            <div class="summary-headline" id="summary-headline"></div>
+            <div class="summary-body" id="summary-body"></div>
+          </div>
+        </div>
+
+        <!-- Main column -->
+        <div class="main-column">
+
       <!-- Snap Section -->
       <div class="snap-card">
         <video id="video" autoplay playsinline></video>
@@ -542,6 +629,9 @@
       <div class="timeline-section">
         <h2>Recent entries</h2>
         <div id="entries-list"><div class="empty-state">No entries yet — snap your first mood above</div></div>
+      </div>
+
+        </div>
       </div>
 
     </div>
@@ -634,7 +724,32 @@
       setTodayDate();
       startCamera();
       loadEntries();
+      loadSummary();
       buildEmotionPicks();
+    }
+
+    async function loadSummary() {
+      try {
+        const res = await fetch(`${API_URL}/summary`, {
+          headers: { 'Authorization': currentToken }
+        });
+        const data = await res.json();
+
+        if (!data.available) return;
+
+        const sidebar = document.getElementById('summary-sidebar');
+        const emotionLabel = data.mostCommon.charAt(0) + data.mostCommon.slice(1).toLowerCase();
+
+        document.getElementById('summary-headline').innerHTML =
+          `Based on your last entries, you've been feeling <span class="emotion-word">${emotionLabel}</span> lately`;
+
+        document.getElementById('summary-body').innerHTML =
+          `<span class="summary-title">A few ideas</span>${data.suggestions}`;
+
+        sidebar.classList.add('visible');
+      } catch (err) {
+        console.error('Could not load summary', err);
+      }
     }
 
     function buildEmotionPicks() {
